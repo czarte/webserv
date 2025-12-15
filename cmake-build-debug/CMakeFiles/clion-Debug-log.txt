@@ -1,0 +1,13 @@
+/usr/local/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/Applications/CLion.app/Contents/bin/ninja/mac/x64/ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -G Ninja -S /Users/vojtechparkan/CLionProjects/webserv -B /Users/vojtechparkan/CLionProjects/webserv/cmake-build-debug
+-- Configuring done (0.1s)
+CMake Error at CMakeLists.txt:6 (add_executable):
+  Cannot find source file:
+
+    main.cpp
+
+
+CMake Error at CMakeLists.txt:6 (add_executable):
+  No SOURCES given to target: webserv
+
+
+CMake Generate step failed.  Build files cannot be regenerated correctly.
