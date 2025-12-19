@@ -11,6 +11,7 @@ HTTP_SRCS := \
 CONFIG_SRCS := \
 	srcs/config/ConfigParser.cpp \
 	srcs/config/Config.cpp \
+	srcs/config/Location.cpp \
 	srcs/config/WebservMaster.cpp
 
 IO_SRCS := \
