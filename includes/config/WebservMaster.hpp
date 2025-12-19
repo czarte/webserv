@@ -5,6 +5,7 @@
 #ifndef WEBSERV_WEBSERVMASTER_H
 #define WEBSERV_WEBSERVMASTER_H
 #include <iostream>
+#include <string>
 
 class WebservMaster {
 	private:
@@ -14,4 +15,4 @@ class WebservMaster {
 };
 
 
-#endif //WEBSERV_WEBSERVMASTER_H
+#endif

@@ -1,7 +1,7 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
-#include "Connection.hpp"
+#include "core/Connection.hpp"
 
 #include <map>
 #include <set>

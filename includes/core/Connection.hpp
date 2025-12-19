@@ -20,4 +20,4 @@ struct Connection
     explicit Connection(int f) : fd(f), in_buf(), out_buf(), state(READING) {}
 };
 
-#endif // CONNECTION_HPP
+#endif 

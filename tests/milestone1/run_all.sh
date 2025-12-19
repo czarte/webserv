@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-ROOT_DIR=$(CDPATH= cd "$(dirname "$0")/.." && pwd)
-TEST_DIR="$ROOT_DIR/tests"
+ROOT_DIR=$(CDPATH= cd "$(dirname "$0")/../.." && pwd)
+TEST_DIR="$ROOT_DIR/tests/milestone1"
 
 echo "[run_all] webserv Milestone 1 test pack"
 echo "[run_all] Expected: server already running on 127.0.0.1:8080"

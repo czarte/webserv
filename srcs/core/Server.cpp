@@ -1,4 +1,4 @@
-#include "Server.hpp"
+#include "core/Server.hpp"
 
 #include <cstring>
 #include <stdexcept>
@@ -11,39 +11,39 @@
 
 namespace
 {
-const char *kDefaultHost = "127.0.0.1";
-const char *kDefaultPort = "8080";
-const std::string kHttpResponse =
-    "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+    const char *kDefaultHost = "127.0.0.1";
+    const char *kDefaultPort = "8080";
+    const std::string kHttpResponse =
+        "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
 
-struct AddrInfoGuard
-{
-    struct addrinfo *res;
-    AddrInfoGuard() : res(0) {}
-    ~AddrInfoGuard()
+    struct AddrInfoGuard
     {
-        if (res)
-            freeaddrinfo(res);
-    }
-};
+        struct addrinfo *res;
+        AddrInfoGuard() : res(0) {}
+        ~AddrInfoGuard()
+        {
+            if (res)
+                freeaddrinfo(res);
+        }
+    };
 
-struct FdGuard
-{
-    int fd;
-    FdGuard() : fd(-1) {}
-    explicit FdGuard(int fd_) : fd(fd_) {}
-    ~FdGuard()
+    struct FdGuard
     {
-        if (fd >= 0)
-            close(fd);
-    }
-    int release()
-    {
-        int tmp = fd;
-        fd = -1;
-        return tmp;
-    }
-};
+        int fd;
+        FdGuard() : fd(-1) {}
+        explicit FdGuard(int fd_) : fd(fd_) {}
+        ~FdGuard()
+        {
+            if (fd >= 0)
+                close(fd);
+        }
+        int release()
+        {
+            int tmp = fd;
+            fd = -1;
+            return tmp;
+        }
+    };
 }
 
 Server::Server()
