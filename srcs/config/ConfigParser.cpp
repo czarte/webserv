@@ -11,7 +11,7 @@ ConfigParser::~ConfigParser()
 {
 }
 
-Config ConfigParser::parse(const char *path)
+Config ConfigParser::parse(const std::string *path)
 {
     std::vector<Config> configs = parseMultiple(path);
     if (configs.empty())
@@ -21,14 +21,14 @@ Config ConfigParser::parse(const char *path)
     return configs[0];
 }
 
-std::vector<Config> ConfigParser::parseMultiple(const char *path)
+std::vector<Config> ConfigParser::parseMultiple(const std::string *path)
 {
     if (!path)
     {
         throw std::runtime_error("Invalid configuration file path");
     }
     
-    _current_file = std::string(path);
+    _current_file = std::string(path->substr());
     _current_line = 0;
     
     std::vector<std::string> lines = readConfigFile(path);
@@ -70,12 +70,12 @@ std::vector<Config> ConfigParser::parseMultiple(const char *path)
     return configs;
 }
 
-std::vector<std::string> ConfigParser::readConfigFile(const char *path)
+std::vector<std::string> ConfigParser::readConfigFile(const std::string *path)
 {
-    std::ifstream file(path);
+    std::ifstream file(path->substr());
     if (!file.is_open())
     {
-        throw std::runtime_error(std::string("Failed to open configuration file: ") + path);
+        throw std::runtime_error(std::string("Failed to open configuration file: ") + path->substr());
     }
     
     std::vector<std::string> lines;

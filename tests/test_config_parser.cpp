@@ -112,8 +112,9 @@ int main(int argc, char** argv)
         
         std::cout << "Parsing configuration file: " << argv[1] << std::endl;
         std::cout << std::endl;
-        
-        std::vector<Config> configs = parser.parseMultiple(argv[1]);
+        std::string file = static_cast<const std::string>(argv[1]);
+
+        std::vector<Config> configs = parser.parseMultiple(&file);
         
         std::cout << "Successfully parsed " << configs.size() << " server configuration(s)" << std::endl;
         std::cout << std::endl;

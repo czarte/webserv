@@ -1,4 +1,4 @@
-#include "core/Server.hpp"
+#include "../../includes/core/Server.hpp"
 
 #include <cstring>
 #include <stdexcept>
@@ -8,11 +8,16 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <vector>
+
+#include <iostream>
+
+#include "../../includes/config/Config.hpp"
+#include "../../includes/config/ConfigParser.hpp"
 
 namespace
 {
-    const char *kDefaultHost = "127.0.0.1";
-    const char *kDefaultPort = "8080";
+    const std::string kDefaultConfigPath = "conf/default.conf";
     const std::string kHttpResponse =
         "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
 
@@ -48,6 +53,15 @@ namespace
 
 Server::Server()
 {
+    ConfigParser configParser;
+    _configs = configParser.parseMultiple(&kDefaultConfigPath);
+    initListeningSockets();
+}
+
+Server::Server(const std::string & config_path)
+{
+    ConfigParser configParser;
+	_configs = configParser.parseMultiple(&config_path);
     initListeningSockets();
 }
 
@@ -67,15 +81,113 @@ void Server::setNonBlocking(int fd)
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
+void printConfig(const Config& config)
+{
+	std::cout << "=== Server Configuration ===" << std::endl;
+	std::cout << "Port: " << config.getPort() << std::endl;
+	std::cout << "Server Name: " << config.getServerName() << std::endl;
+	std::cout << "Host: " << config.getHost() << std::endl;
+	std::cout << "Root: " << config.getRoot() << std::endl;
+	std::cout << "Client Max Body Size: " << config.getClientMaxBodySize() << std::endl;
+	std::cout << "Index: " << config.getIndex() << std::endl;
+
+	ErrorPage ep = config.getErrorPage();
+	if (ep.code != 0)
+	{
+		std::cout << "Error Page: " << ep.code << " -> " << ep.path << std::endl;
+	}
+
+	std::vector<Location> locations = config.getLocations();
+	std::cout << "\nLocations (" << locations.size() << "):" << std::endl;
+
+	for (size_t i = 0; i < locations.size(); i++)
+	{
+		std::cout << "\n  Location: " << locations[i].getPath() << std::endl;
+
+		if (!locations[i].getRoot().empty())
+		{
+			std::cout << "    Root: " << locations[i].getRoot() << std::endl;
+		}
+
+		if (!locations[i].getIndex().empty())
+		{
+			std::cout << "    Index: " << locations[i].getIndex() << std::endl;
+		}
+
+		std::cout << "    Autoindex: " << (locations[i].getAutoindex() ? "on" : "off") << std::endl;
+
+		std::vector<std::string> methods = locations[i].getAllowedMethods();
+		if (!methods.empty())
+		{
+			std::cout << "    Allowed Methods: ";
+			for (size_t j = 0; j < methods.size(); j++)
+			{
+				std::cout << methods[j];
+				if (j < methods.size() - 1)
+				{
+					std::cout << ", ";
+				}
+			}
+			std::cout << std::endl;
+		}
+
+		if (!locations[i].getRedirect().empty())
+		{
+			std::cout << "    Redirect: " << locations[i].getRedirect() << std::endl;
+		}
+
+		std::vector<std::string> cgi_paths = locations[i].getCgiPath();
+		if (!cgi_paths.empty())
+		{
+			std::cout << "    CGI Paths: ";
+			for (size_t j = 0; j < cgi_paths.size(); j++)
+			{
+				std::cout << cgi_paths[j];
+				if (j < cgi_paths.size() - 1)
+				{
+					std::cout << ", ";
+				}
+			}
+			std::cout << std::endl;
+		}
+
+		std::vector<std::string> cgi_exts = locations[i].getCgiExt();
+		if (!cgi_exts.empty())
+		{
+			std::cout << "    CGI Extensions: ";
+			for (size_t j = 0; j < cgi_exts.size(); j++)
+			{
+				std::cout << cgi_exts[j];
+				if (j < cgi_exts.size() - 1)
+				{
+					std::cout << ", ";
+				}
+			}
+			std::cout << std::endl;
+		}
+
+		if (!locations[i].getUploadPath().empty())
+		{
+			std::cout << "    Upload Path: " << locations[i].getUploadPath() << std::endl;
+		}
+	}
+
+	std::cout << "\n============================\n" << std::endl;
+}
+
 void Server::initListeningSockets()
 {
     struct addrinfo hints;
     std::memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
+	printConfig(this->_configs[0]);
+	std::stringstream mainport;
+	mainport << this->_configs[0].getPort();
+	std::cout << this->_configs[0].getPort();
 
     AddrInfoGuard info;
-    if (getaddrinfo(kDefaultHost, kDefaultPort, &hints, &info.res) != 0)
+    if (getaddrinfo(this->_configs[0].getHost().c_str(), mainport.str().c_str(), &hints, &info.res) != 0)
         throw std::runtime_error("getaddrinfo failed");
 
     for (struct addrinfo *p = info.res; p != 0; p = p->ai_next)

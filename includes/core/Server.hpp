@@ -1,7 +1,8 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
-#include "core/Connection.hpp"
+#include "./Connection.hpp"
+#include "../config/Config.hpp"
 
 #include <map>
 #include <set>
@@ -20,6 +21,7 @@ public:
 
 private:
     Server(const Server &);
+    Server(const std::string & config_path);
     Server &operator=(const Server &);
 
     void initListeningSockets();
@@ -32,6 +34,7 @@ private:
     void setNonBlocking(int fd);
     bool isListeningFd(int fd) const;
 
+	std::vector<Config> _configs;
     std::vector<int> _listening_fds;
     std::set<int> _listening_set;
     std::map<int, Connection> _clients;
