@@ -40,7 +40,7 @@ test-m1: $(NAME)
 test-config: CXXFLAGS += -g
 test-config:
 	@mkdir -p $(BUILD_DIR)/tests
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c tests/test_config_parser.cpp -o $(BUILD_DIR)/tests/test_config_parser.o
+	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c tests/milestone4/test_config_parser.cpp -o $(BUILD_DIR)/tests/test_config_parser.o
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c srcs/config/Config.cpp -o $(BUILD_DIR)/config/Config.o
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c srcs/config/ConfigParser.cpp -o $(BUILD_DIR)/config/ConfigParser.o
 	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -c srcs/config/Location.cpp -o $(BUILD_DIR)/config/Location.o
