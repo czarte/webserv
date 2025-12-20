@@ -24,7 +24,7 @@ private:
     Server(const std::string & config_path);
     Server &operator=(const Server &);
 
-    void initListeningSockets();
+    void initListeningSockets(Config &config);
     void buildPollFds(std::vector<struct pollfd> &pfds);
     void handlePollEvents(const std::vector<struct pollfd> &pfds);
     void handleListeningEvent(int fd);

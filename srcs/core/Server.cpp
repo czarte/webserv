@@ -55,14 +55,19 @@ Server::Server()
 {
     ConfigParser configParser;
     _configs = configParser.parseMultiple(&kDefaultConfigPath);
-    initListeningSockets();
+	for (size_t it = 0; it < _configs.size(); it++) {
+		initListeningSockets((Config &) _configs[it]);
+	}
+
 }
 
 Server::Server(const std::string & config_path)
 {
     ConfigParser configParser;
 	_configs = configParser.parseMultiple(&config_path);
-    initListeningSockets();
+	for (size_t it = 0; it < _configs.size(); it++) {
+		initListeningSockets((Config &) _configs[it]);
+	}
 }
 
 Server::~Server()
@@ -175,16 +180,16 @@ void printConfig(const Config& config)
 	std::cout << "\n============================\n" << std::endl;
 }
 
-void Server::initListeningSockets()
+void Server::initListeningSockets(Config &config)
 {
     struct addrinfo hints;
     std::memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-	printConfig(this->_configs[0]);
+	printConfig(config);
 	std::stringstream mainport;
-	mainport << this->_configs[0].getPort();
-	std::cout << this->_configs[0].getPort();
+	mainport << config.getPort();
+	std::cout << config.getPort();
 
     AddrInfoGuard info;
     if (getaddrinfo(this->_configs[0].getHost().c_str(), mainport.str().c_str(), &hints, &info.res) != 0)

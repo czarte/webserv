@@ -4,3 +4,4 @@ webserver
 *.o
 *.d
 build
+test_config_parser
