@@ -3,19 +3,19 @@
 
 class Fd
 {
-public:
-    Fd();
-    explicit Fd(int fd);
-    ~Fd();
+    public:
+        Fd();
+        explicit Fd(int fd);
+        ~Fd();
 
-    int get() const;
-    int release();
+        int get() const;
+        int release();
 
-private:
-    Fd(const Fd &);
-    Fd &operator=(const Fd &);
+    private:
+        Fd(const Fd &);
+        Fd &operator=(const Fd &);
 
-    int _fd;
+        int _fd;
 };
 
 #endif 

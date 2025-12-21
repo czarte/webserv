@@ -1,6 +1,7 @@
 
 CORE_SRCS := \
 	srcs/core/Server.cpp \
+	srcs/core/Fd.cpp \
 	srcs/core/EventLoop.cpp
 
 HTTP_SRCS := \

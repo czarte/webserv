@@ -10,4 +10,4 @@ public:
     Request parse(const char *data, int len);
 };
 
-#endif // HTTP_PARSER_HPP
+#endif

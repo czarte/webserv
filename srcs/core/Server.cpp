@@ -1,8 +1,13 @@
 #include "core/Server.hpp"
+#include "core/Fd.hpp"
 
 #include <cstring>
 #include <stdexcept>
 #include <utility>
+
+
+
+#include <cerrno>
 
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -13,38 +18,26 @@ namespace
 {
     const char *kDefaultHost = "127.0.0.1";
     const char *kDefaultPort = "8080";
+
     const std::string kHttpResponse =
-        "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Length: 2\r\n"
+        "Connection: close\r\n"
+        "\r\n"
+        "OK";
 
     struct AddrInfoGuard
     {
-        struct addrinfo *res;
+        addrinfo *res;
         AddrInfoGuard() : res(0) {}
-        ~AddrInfoGuard()
-        {
-            if (res)
-                freeaddrinfo(res);
-        }
-    };
+        ~AddrInfoGuard() { if (res) freeaddrinfo(res); }
 
-    struct FdGuard
-    {
-        int fd;
-        FdGuard() : fd(-1) {}
-        explicit FdGuard(int fd_) : fd(fd_) {}
-        ~FdGuard()
-        {
-            if (fd >= 0)
-                close(fd);
-        }
-        int release()
-        {
-            int tmp = fd;
-            fd = -1;
-            return tmp;
-        }
+    private:
+        AddrInfoGuard(const AddrInfoGuard &);
+        AddrInfoGuard &operator=(const AddrInfoGuard &);
     };
 }
+
 
 Server::Server()
 {
@@ -80,20 +73,20 @@ void Server::initListeningSockets()
 
     for (struct addrinfo *p = info.res; p != 0; p = p->ai_next)
     {
-        FdGuard sock(socket(p->ai_family, p->ai_socktype, p->ai_protocol));
-        if (sock.fd < 0)
+        Fd sock(socket(p->ai_family, p->ai_socktype, p->ai_protocol));
+        if (sock.get() < 0)
             continue;
 
         int opt = 1;
-        if (setsockopt(sock.fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+        if (setsockopt(sock.get(), SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
             continue;
 
-        setNonBlocking(sock.fd);
+        setNonBlocking(sock.get());
 
-        if (bind(sock.fd, p->ai_addr, p->ai_addrlen) < 0)
+        if (bind(sock.get(), p->ai_addr, p->ai_addrlen) < 0)
             continue;
 
-        if (listen(sock.fd, 128) < 0)
+        if (listen(sock.get(), 128) < 0)
             continue;
 
         int listen_fd = sock.release();
@@ -162,19 +155,45 @@ void Server::handleClientRead(int fd)
     if (it == _clients.end())
         return;
 
+    Connection &conn = it->second;
+
     char buffer[4096];
-    ssize_t n = recv(fd, buffer, sizeof(buffer), 0);
-    if (n <= 0)
+
+    for (;;)
     {
+        ssize_t n = recv(fd, buffer, sizeof(buffer), 0);
+
+        if (n > 0)
+        {
+            conn.in_buf.append(buffer, static_cast<size_t>(n));
+            continue;
+        }
+
+        if (n == 0)
+        {
+            closeClient(fd);
+            return;
+        }
+
+        if (errno == EINTR)
+            continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            break;
         closeClient(fd);
         return;
     }
 
-    Connection &conn = it->second;
-    conn.in_buf.append(buffer, static_cast<size_t>(n));
-    conn.out_buf = kHttpResponse;
-    conn.state = Connection::WRITING;
+    if (!conn.in_buf.empty())
+    {
+        conn.out_buf = kHttpResponse;
+        conn.state = Connection::WRITING;
+    }
 }
+
+
+
+
+
 
 void Server::handleClientWrite(int fd)
 {
