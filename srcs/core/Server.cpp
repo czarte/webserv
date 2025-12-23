@@ -1,12 +1,16 @@
 #include "core/Server.hpp"
 #include "core/Fd.hpp"
 #include "http/Parser.hpp"
+#include "http/ResponseBuilder.hpp"
+#include "utils/Path.hpp"
 #include "utils/Time.hpp"
+#include "io/FileSystem.hpp"
+#include "config/ConfigParser.hpp"
+#include "config/Route.hpp"
 #include <cstring>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
-
-
 
 #include <cerrno>
 
@@ -17,8 +21,7 @@
 
 namespace
 {
-    const char *kDefaultHost = 0;
-    const char *kDefaultPort = "8080";
+    const char *kDefaultConfigPath = "conf/default.conf";
     const size_t kHeaderTimeoutMs = 5000;
     const size_t kIdleTimeoutMs = 15000;
 
@@ -40,27 +43,18 @@ namespace
         AddrInfoGuard &operator=(const AddrInfoGuard &);
     };
 
-    std::string buildErrorResponse(int status)
-    {
-        if (status == 405)
-        {
-            return "HTTP/1.1 405 Method Not Allowed\r\n"
-                   "Content-Length: 0\r\n"
-                   "Connection: close\r\n"
-                   "\r\n";
-        }
-
-        return "HTTP/1.1 400 Bad Request\r\n"
-               "Content-Length: 0\r\n"
-               "Connection: close\r\n"
-               "\r\n";
-    }
 }
 
 
 Server::Server()
 {
-    initListeningSockets();
+    ConfigParser parser;
+    std::string path(kDefaultConfigPath);
+    _configs = parser.parseMultiple(&path);
+    if (_configs.empty())
+        throw std::runtime_error("No server configurations loaded");
+    for (size_t i = 0; i < _configs.size(); ++i)
+        initListeningSockets(_configs[i], i);
 }
 
 Server::~Server()
@@ -79,7 +73,7 @@ void Server::setNonBlocking(int fd)
     fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-void Server::initListeningSockets()
+void Server::initListeningSockets(const Config &config, size_t config_index)
 {
     struct addrinfo hints;
     std::memset(&hints, 0, sizeof(hints));
@@ -87,7 +81,9 @@ void Server::initListeningSockets()
     hints.ai_socktype = SOCK_STREAM;
 
     AddrInfoGuard info;
-    if (getaddrinfo(kDefaultHost, kDefaultPort, &hints, &info.res) != 0)
+    std::stringstream port;
+    port << config.getPort();
+    if (getaddrinfo(config.getHost().c_str(), port.str().c_str(), &hints, &info.res) != 0)
         throw std::runtime_error("getaddrinfo failed");
 
     for (struct addrinfo *p = info.res; p != 0; p = p->ai_next)
@@ -111,6 +107,7 @@ void Server::initListeningSockets()
         int listen_fd = sock.release();
         _listening_fds.push_back(listen_fd);
         _listening_set.insert(listen_fd);
+        _listen_config.insert(std::make_pair(listen_fd, config_index));
     }
 
     if (_listening_fds.empty())
@@ -160,6 +157,9 @@ void Server::handleListeningEvent(int fd)
         Connection conn(client_fd);
         conn.last_activity_ms = now_ms();
         conn.header_start_ms = conn.last_activity_ms;
+        std::map<int, size_t>::const_iterator cfg = _listen_config.find(fd);
+        if (cfg != _listen_config.end())
+            conn.config_index = cfg->second;
         _clients.insert(std::make_pair(client_fd, conn)); 
     }
 }
@@ -232,16 +232,86 @@ void Server::handleClientRead(int fd)
             }
 
             if (result == Parser::PARSE_ERROR || status != 200)
-                conn.out_buf += buildErrorResponse(status);
+            {
+                conn.keep_alive = false;
+                conn.out_buf += buildErrorResponse(status, false);
+                conn.state = Connection::WRITING;
+                break;
+            }
+
+            std::string uri = stripQuery(conn.request.target);
+            if (uri.empty())
+                uri = "/";
+            if (hasTraversal(uri))
+            {
+                conn.out_buf += buildErrorResponse(403, conn.keep_alive);
+                conn.state = Connection::WRITING;
+                break;
+            }
+
+            const Config &cfg = (conn.config_index < _configs.size())
+                ? _configs[conn.config_index]
+                : _configs[0];
+            const Location *loc = matchLocation(cfg, uri);
+            std::string root = cfg.getRoot();
+            std::string index = cfg.getIndex();
+            bool autoindex = false;
+            if (loc)
+            {
+                if (!loc->getRoot().empty())
+                    root = loc->getRoot();
+                if (!loc->getIndex().empty())
+                    index = loc->getIndex();
+                autoindex = loc->getAutoindex();
+            }
+
+            std::string path = joinPath(root, uri);
+            std::string body;
+            std::string content_type = "text/plain";
+            int resp_status = 200;
+            bool ok = false;
+
+            if (isDirectory(path))
+            {
+                if (!index.empty())
+                {
+                    std::string idx_path = joinPath(path, index);
+                    if (isFile(idx_path))
+                    {
+                        body = readFile(idx_path, ok);
+                        content_type = contentTypeForPath(idx_path);
+                    }
+                }
+
+                if (body.empty() && autoindex)
+                {
+                    body = buildAutoindex(path, uri);
+                    if (body.empty())
+                        resp_status = 500;
+                    content_type = "text/html";
+                    ok = !body.empty();
+                }
+
+                if (body.empty() && !autoindex)
+                    resp_status = 403;
+            }
+            else if (isFile(path))
+            {
+                body = readFile(path, ok);
+                content_type = contentTypeForPath(path);
+                if (!ok)
+                    resp_status = 500;
+            }
             else
             {
-                std::string conn_state = conn.keep_alive ? "keep-alive" : "close";
-                conn.out_buf += "HTTP/1.1 200 OK\r\n"
-                                "Content-Length: 4\r\n"
-                                "Connection: " + conn_state + "\r\n"
-                                "\r\n"
-                                "OK!!";
+                resp_status = 404;
             }
+
+            if (resp_status != 200)
+                conn.out_buf += buildErrorResponse(resp_status, conn.keep_alive);
+            else
+                conn.out_buf += buildResponse(200, body, conn.keep_alive, content_type);
+
             conn.state = Connection::WRITING;
             conn.request = Request();
         }
