@@ -2,6 +2,7 @@
 CORE_SRCS := \
 	srcs/core/Server.cpp \
 	srcs/core/Fd.cpp \
+	srcs/core/Connection.cpp \
 	srcs/core/EventLoop.cpp
 
 HTTP_SRCS := \
@@ -25,7 +26,8 @@ CGI_SRCS := \
 
 UTIL_SRCS := \
 	srcs/utils/Log.cpp \
-	srcs/utils/String.cpp
+	srcs/utils/String.cpp \
+	srcs/utils/Time.cpp
 
 SRCS := \
 	srcs/main.cpp \

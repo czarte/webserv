@@ -1,6 +1,7 @@
 #include "core/Server.hpp"
 #include "core/Fd.hpp"
-
+#include "http/Parser.hpp"
+#include "utils/Time.hpp"
 #include <cstring>
 #include <stdexcept>
 #include <utility>
@@ -16,15 +17,17 @@
 
 namespace
 {
-    const char *kDefaultHost = "127.0.0.1";
+    const char *kDefaultHost = 0;
     const char *kDefaultPort = "8080";
+    const size_t kHeaderTimeoutMs = 5000;
+    const size_t kIdleTimeoutMs = 15000;
 
-    const std::string kHttpResponse =
-        "HTTP/1.1 200 OK\r\n"
-        "Content-Length: 2\r\n"
-        "Connection: close\r\n"
-        "\r\n"
-        "OK";
+    // const std::string kHttpResponse =
+    //     "HTTP/1.1 200 OK \r\n"
+    //     "Content-Length: 4\r\n"
+    //     "Connection: close\r\n"
+    //     "\r\n"
+    //     "OK!!";
 
     struct AddrInfoGuard
     {
@@ -36,6 +39,22 @@ namespace
         AddrInfoGuard(const AddrInfoGuard &);
         AddrInfoGuard &operator=(const AddrInfoGuard &);
     };
+
+    std::string buildErrorResponse(int status)
+    {
+        if (status == 405)
+        {
+            return "HTTP/1.1 405 Method Not Allowed\r\n"
+                   "Content-Length: 0\r\n"
+                   "Connection: close\r\n"
+                   "\r\n";
+        }
+
+        return "HTTP/1.1 400 Bad Request\r\n"
+               "Content-Length: 0\r\n"
+               "Connection: close\r\n"
+               "\r\n";
+    }
 }
 
 
@@ -138,8 +157,10 @@ void Server::handleListeningEvent(int fd)
         if (client_fd < 0)
             break;
         setNonBlocking(client_fd);
-
-        _clients.insert(std::make_pair(client_fd, Connection(client_fd)));
+        Connection conn(client_fd);
+        conn.last_activity_ms = now_ms();
+        conn.header_start_ms = conn.last_activity_ms;
+        _clients.insert(std::make_pair(client_fd, conn)); 
     }
 }
 
@@ -166,6 +187,7 @@ void Server::handleClientRead(int fd)
         if (n > 0)
         {
             conn.in_buf.append(buffer, static_cast<size_t>(n));
+            conn.last_activity_ms=now_ms();
             continue;
         }
 
@@ -185,8 +207,44 @@ void Server::handleClientRead(int fd)
 
     if (!conn.in_buf.empty())
     {
-        conn.out_buf = kHttpResponse;
-        conn.state = Connection::WRITING;
+        Parser parser;
+        for (;;)
+        {
+            int status = 200;
+            std::string err;
+            Parser::Result result = parser.parseOne(conn.in_buf, conn.request, status, err);
+            if (result == Parser::NEED_MORE)
+                break;
+
+            if (conn.request.version == "HTTP/1.1")
+                conn.keep_alive = true;
+            else
+                conn.keep_alive = false;
+
+            std::map<std::string, std::string>::iterator it =
+                conn.request.headers.find("Connection");
+            if (it != conn.request.headers.end())
+            {
+                if (it->second == "close")
+                    conn.keep_alive = false;
+                else if (it->second == "keep-alive")
+                    conn.keep_alive = true;
+            }
+
+            if (result == Parser::PARSE_ERROR || status != 200)
+                conn.out_buf += buildErrorResponse(status);
+            else
+            {
+                std::string conn_state = conn.keep_alive ? "keep-alive" : "close";
+                conn.out_buf += "HTTP/1.1 200 OK\r\n"
+                                "Content-Length: 4\r\n"
+                                "Connection: " + conn_state + "\r\n"
+                                "\r\n"
+                                "OK!!";
+            }
+            conn.state = Connection::WRITING;
+            conn.request = Request();
+        }
     }
 }
 
@@ -203,15 +261,33 @@ void Server::handleClientWrite(int fd)
 
     Connection &conn = it->second;
     ssize_t n = send(fd, conn.out_buf.c_str(), conn.out_buf.size(), 0);
-    if (n <= 0)
+    if (n < 0)
+    {
+        if (errno == EINTR)
+            return;
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return;
+        closeClient(fd);
+        return;
+    }
+    if (n == 0)
     {
         closeClient(fd);
         return;
     }
 
     conn.out_buf.erase(0, static_cast<size_t>(n));
-    if (conn.out_buf.empty())
-        closeClient(fd);
+    conn.last_activity_ms=now_ms();
+    if (conn.out_buf.empty() )
+    {
+        if(conn.keep_alive)
+        {
+            conn.header_start_ms = now_ms();
+            conn.state = Connection::READING;
+        }
+        else 
+            closeClient(fd);
+    }
 }
 
 void Server::handlePollEvents(const std::vector<struct pollfd> &pfds)
@@ -265,5 +341,31 @@ void Server::run()
         if (ret <= 0)
             continue;
         handlePollEvents(pfds);
+        for (std::map<int, Connection>::iterator it = _clients.begin(); it != _clients.end(); )
+        {
+            Connection &conn = it->second;
+            if (conn.state == Connection::READING
+                && elapsed_ms(conn.header_start_ms) > kHeaderTimeoutMs)
+            {
+                int fd = it->first;
+                ++it;
+                closeClient(fd);
+                continue;
+            }
+            ++it;
+        }
+        for (std::map<int, Connection>::iterator it = _clients.begin(); it != _clients.end(); )
+        {
+            if (elapsed_ms(it->second.last_activity_ms) > kIdleTimeoutMs)
+            {
+                int fd = it->first;
+                ++it;
+                closeClient(fd);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 }

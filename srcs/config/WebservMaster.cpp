@@ -6,6 +6,5 @@
 
 std::string WebservMaster::getConfig(std::string configFilePath)
 {
-    // Placeholder loader; replace with real parser.
     return configFilePath;
 }
