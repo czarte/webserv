@@ -90,7 +90,7 @@ Serve static resources and directories using routing rules.
 
 ---
 
-## Milestone 5 — Request Bodies, Uploads & DELETE
+## Milestone 5 — Request Bodies, Uploads & DELETE, POST, GET
 
 **Goal**
 Extend client workers to handle HTTP bodies safely.
