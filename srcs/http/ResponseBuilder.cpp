@@ -5,27 +5,28 @@
 
 namespace
 {
-std::string toLower(const std::string &s)
-{
-    std::string out = s;
-    for (size_t i = 0; i < out.size(); ++i)
-        out[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(out[i])));
-    return out;
-}
+	std::string toLower(const std::string &s)
+	{
+		std::string out = s;
+		for (size_t i = 0; i < out.size(); ++i)
+			out[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(out[i])));
+		return out;
+	}
 
-const char *statusMessage(int status)
-{
-    switch (status)
-    {
-    case 200: return "OK";
-    case 400: return "Bad Request";
-    case 403: return "Forbidden";
-    case 404: return "Not Found";
-    case 405: return "Method Not Allowed";
-    case 500: return "Internal Server Error";
-    default:  return "Error";
-    }
-}
+	const char *statusMessage(int status)
+	{
+		//TODO implement Server error pages
+		switch (status)
+		{
+		case 200: return "OK";
+		case 400: return "Bad Request";
+		case 403: return "Forbidden";
+		case 404: return "Not Found";
+		case 405: return "Method Not Allowed";
+		case 500: return "Internal Server Error";
+		default:  return "Error";
+		}
+	}
 }
 
 std::string contentTypeForPath(const std::string &path)
