@@ -6,6 +6,8 @@
 bool isDirectory(const std::string &path);
 bool isFile(const std::string &path);
 std::string readFile(const std::string &path, bool &ok);
+bool writeFile(const std::string &path, const std::string &data);
+bool deleteFile(const std::string &path);
 std::string buildAutoindex(const std::string &path, const std::string &uri);
 
 #endif

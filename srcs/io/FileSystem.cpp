@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <fstream>
 #include <sstream>
+#include <cstdio>
 #include <sys/stat.h>
 
 bool isDirectory(const std::string &path)
@@ -33,6 +34,20 @@ std::string readFile(const std::string &path, bool &ok)
     ss << in.rdbuf();
     ok = true;
     return ss.str();
+}
+
+bool writeFile(const std::string &path, const std::string &data)
+{
+    std::ofstream out(path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
+    if (!out)
+        return false;
+    out.write(data.c_str(), static_cast<std::streamsize>(data.size()));
+    return out.good();
+}
+
+bool deleteFile(const std::string &path)
+{
+    return std::remove(path.c_str()) == 0;
 }
 
 std::string buildAutoindex(const std::string &path, const std::string &uri)

@@ -1,6 +1,10 @@
 #include "http/Parser.hpp"
 
 #include <cctype>
+#include <sstream>
+#include <cstdlib>
+#include <cerrno>
+#include <limits>
 
 namespace
 {
@@ -15,6 +19,27 @@ namespace
             --b;
 
         return s.substr(a, b - a);
+    }
+
+    std::string toLower(const std::string &s)
+    {
+        std::string out = s;
+        for (size_t i = 0; i < out.size(); ++i)
+            out[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(out[i])));
+        return out;
+    }
+
+    HttpMethod parseMethod(const std::string &m)
+    {
+        if (m == "GET")
+            return METHOD_GET;
+        if (m == "POST")
+            return METHOD_POST;
+        if (m == "PUT")
+            return METHOD_PUT;
+        if (m == "DELETE")
+            return METHOD_DELETE;
+        return METHOD_UNKNOWN;
     }
 
 bool split3(const std::string &line, std::string &a, std::string &b, std::string &c)
@@ -58,13 +83,14 @@ int Parser::parseRequestLine(const std::string &line, Request &out) const
         return 400;
 
     out.method = method;
+    out.method_enum = parseMethod(method);
     out.target = target;
     out.version = version;
 
     if (version != "HTTP/1.1" && version != "HTTP/1.0")
         return 400;
 
-    if (method != "GET")
+    if (out.method_enum == METHOD_UNKNOWN)
         return 405;
 
     return 200;
@@ -122,7 +148,7 @@ Parser::Result Parser::parseOne(std::string &in_buf, Request &req, int &status, 
             return PARSE_ERROR;
         }
 
-        std::string key = trim(line.substr(0, colon));
+        std::string key = toLower(trim(line.substr(0, colon)));
         std::string val = trim(line.substr(colon + 1));
         if (key.empty())
         {
@@ -132,6 +158,25 @@ Parser::Result Parser::parseOne(std::string &in_buf, Request &req, int &status, 
         }
 
         req.headers[key] = val;
+    }
+
+    std::map<std::string, std::string>::iterator it = req.headers.find("content-length");
+    if (it != req.headers.end())
+    {
+        const std::string &val = it->second;
+        errno = 0;
+        char *end = 0;
+        unsigned long long len = std::strtoull(val.c_str(), &end, 10);
+        while (end && *end && std::isspace(static_cast<unsigned char>(*end)))
+            ++end;
+        if (errno != 0 || !end || *end != '\0' || len > std::numeric_limits<size_t>::max())
+        {
+            err = "invalid content-length";
+            status = 400;
+            return PARSE_ERROR;
+        }
+        req.content_length = static_cast<size_t>(len);
+        req.has_body = (req.content_length > 0);
     }
 
     return PARSED_OK;

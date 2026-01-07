@@ -8,7 +8,12 @@
 
 struct Connection
 {
-    enum State { READING, WRITING };
+    enum State
+	{
+		READING_HEADERS,
+		READING_BODY,
+		WRITING
+	};
 
     int fd;
     std::string in_buf;
@@ -19,6 +24,8 @@ struct Connection
     size_t last_activity_ms;
     size_t header_start_ms;
     State state;
+    size_t body_bytes_read;
+    size_t body_bytes_expected;
 
     Connection();
     explicit Connection(int f);

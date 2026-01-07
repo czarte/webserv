@@ -1,6 +1,9 @@
 
 CORE_SRCS := \
-	srcs/core/Server.cpp \
+	srcs/core/server/ServerCore.cpp \
+	srcs/core/server/ServerPoll.cpp \
+	srcs/core/server/ServerClient.cpp \
+	srcs/core/server/ServerDispatch.cpp \
 	srcs/core/Fd.cpp \
 	srcs/core/Connection.cpp \
 	srcs/core/EventLoop.cpp

@@ -22,3 +22,17 @@ All tests assume the server is already running on `127.0.0.1:8080`.
 - `06_poll_compliance_trace.sh` (optional)  
   If `strace` is available, prints an example command showing how to trace `poll/accept/recv/send` to manually inspect poll-gating. If `strace` is missing, prints “skipped”.
 
+# Milestone 5 test pack
+
+These tests assume an upload-enabled location exists in `conf/default.conf`.
+
+## Tests
+
+- `01_post_upload.sh`  
+  Uploads a small body to `upload_path` and verifies the file is written.
+
+- `02_delete_upload.sh`  
+  Deletes an uploaded file and verifies it is removed.
+
+- `03_body_too_large.sh`  
+  Sends a body larger than `client_max_body_size` and expects HTTP 413.

@@ -9,7 +9,9 @@ Connection::Connection()
     , keep_alive(false)
     , last_activity_ms(0)
     , header_start_ms(0)
-    , state(READING)
+    , state(READING_HEADERS)
+    , body_bytes_read(0)
+    , body_bytes_expected(0)
 {
 }
 
@@ -22,6 +24,8 @@ Connection::Connection(int f)
     , keep_alive(false)
     , last_activity_ms(0)
     , header_start_ms(0)
-    , state(READING)
+    , state(READING_HEADERS)
+    , body_bytes_read(0)
+    , body_bytes_expected(0)
 {
 }
