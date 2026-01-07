@@ -14,6 +14,12 @@ enum HttpMethod
     METHOD_UNKNOWN
 };
 
+enum CGIMethod {
+	PHP,
+	Python,
+	Static
+};
+
 class Request
 {
 public:
@@ -27,6 +33,7 @@ public:
     size_t content_length;
     bool has_body;
     std::string body;
+	CGIMethod cgi;
 };
 
 #endif

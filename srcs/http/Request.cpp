@@ -9,5 +9,6 @@ Request::Request()
     , content_length(0)
     , has_body(false)
     , body()
+	, cgi(Static)
 {
 }
