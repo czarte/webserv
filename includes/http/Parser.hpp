@@ -15,10 +15,8 @@ public:
     };
 
     Parser();
-    
     bool hasCompleteHeaders(const std::string &buf) const;
     Result parseOne(std::string &in_buf, Request &req, int &status, std::string &err) const;
-    
 private:
     int parseRequestLine(const std::string &line, Request &out) const;
 };

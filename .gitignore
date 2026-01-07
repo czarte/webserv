@@ -1,3 +1,7 @@
 cmake-build-debug
 webserver
 .idea
+.build
+.vscode
+webserv
+

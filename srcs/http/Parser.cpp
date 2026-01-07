@@ -159,7 +159,7 @@ Parser::Result Parser::parseOne(std::string &in_buf, Request &req, int &status, 
 
         req.headers[key] = val;
     }
-
+     // validate headers fields : check all bad cases in the header fields
     std::map<std::string, std::string>::iterator it = req.headers.find("content-length");
     if (it != req.headers.end())
     {
