@@ -19,7 +19,9 @@ set(SRCS
         srcs/cgi/CgiHandler.cpp
         srcs/cgi/CgiProcess.cpp
         srcs/utils/Log.cpp
-        srcs/utils/String.cpp)
+        srcs/utils/String.cpp
+        includes/config/Route.hpp
+        includes/utils/Path.hpp)
 
 add_executable(webserv ${SRCS})
 target_include_directories(webserv PRIVATE includes)

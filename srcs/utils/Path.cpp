@@ -1,15 +1,18 @@
 #include "utils/Path.hpp"
+#include <iostream>
 
-std::string stripQuery(const std::string &target)
+std::pair<std::string, std::string> stripQuery(const std::string &target)
 {
+	std::cout << target << std::endl;
     std::string::size_type q = target.find_first_of("?#");
     if (q == std::string::npos)
-        return target;
-    return target.substr(0, q);
+		return std::make_pair(target.substr(0, q), "");
+	return std::make_pair(target.substr(0, q), target.substr(q));
 }
 
 std::string joinPath(const std::string &root, const std::string &path)
 {
+	std::cout << root << " " << path << std::endl;
     if (root.empty())
         return path;
     if (path.empty())

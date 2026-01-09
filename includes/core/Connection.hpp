@@ -18,7 +18,7 @@ struct Connection
     int fd;
     std::string in_buf;
     std::string out_buf;
-    Request * request;
+    Request request;
     size_t config_index;
     bool keep_alive;
     size_t last_activity_ms;

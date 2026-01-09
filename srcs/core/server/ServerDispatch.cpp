@@ -4,6 +4,8 @@
 #include "utils/Path.hpp"
 #include "io/FileSystem.hpp"
 #include "config/Route.hpp"
+#include "cgi/CgiHandler.hpp"
+#include <iostream>
 
 namespace
 {
@@ -177,7 +179,8 @@ namespace
 
 void Server::handleReadyRequest(Connection &conn)
 {
-    std::string uri = stripQuery(conn.request.target);
+    std::string uri = stripQuery(conn.request.target).first;
+	std::string query = stripQuery(conn.request.target).second;
     if (uri.empty())
         uri = "/";
 
@@ -221,6 +224,14 @@ void Server::handleReadyRequest(Connection &conn)
         respondError(conn, 403);
         return;
     }
-
-    serveStatic(conn, path, uri, index, autoindex);
+	std::cout << "request: " << path << " " << uri << " " << query << " " << index << " " << autoindex << std::endl;
+	if (query.empty())
+		serveStatic(conn, path, uri, index, autoindex);
+	else
+	{
+		CgiHandler handler;
+		handler.setPythonInterpreter("/usr/bin/python3");
+		handler.setDocumentRoot(path);
+		std::string response = handler.handleRequest(conn.request, "/cgi-bin/echo.py");
+	}
 }
