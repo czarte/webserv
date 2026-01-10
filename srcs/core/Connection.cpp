@@ -11,7 +11,13 @@ Connection::Connection()
     , header_start_ms(0)
     , state(READING_HEADERS)
     , body_bytes_read(0)
-    , body_bytes_expected(0)
+    , body_bytes_expected(0),
+	  cgi_request(false),
+	  cgi_script_path(),
+	  cgi_bin_path(),
+	  cgi_path_info(),
+	  location(NULL)
+
 {
 }
 

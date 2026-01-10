@@ -29,9 +29,8 @@ private:
     void handleListeningEvent(int fd);
     void handleClientRead(int fd);
     void handleClientWrite(int fd);
-    void handleReadyRequest(Connection &conn);
+    void handleReadyRequest(Connection &conn, std::vector<Config> _configs);
     void closeClient(int fd);
-    void setNonBlocking(int fd);
     bool isListeningFd(int fd) const;
 
     std::vector<int> _listening_fds;

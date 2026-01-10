@@ -298,6 +298,14 @@ void ConfigParser::parseLocationDirective(const std::string& directive, const st
         }
         location.setIndex(tokens[1]);
     }
+	else if (directive == "cgi")  // New: handle cgi on/off
+	{
+		if (tokens.size() < 2)
+		{
+			throwError("cgi directive requires a value (on/off)", _current_line);
+		}
+		location.setCgiEnabled(tokens[1] == "on");
+	}
     else if (directive == "autoindex")
     {
         if (tokens.size() < 2)

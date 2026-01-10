@@ -17,6 +17,7 @@ enum HttpMethod
 enum CGIMethod {
 	PHP,
 	Python,
+	Shell,
 	Static
 };
 

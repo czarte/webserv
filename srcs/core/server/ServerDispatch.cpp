@@ -177,27 +177,103 @@ namespace
     }
 }
 
-void serveCgi(Connection &connection, const std::string &path, const std::string &query)
+void serveCgi(Connection &connection, std::vector<Config> configs)
 {
-	std::string body;
-	std::string content_type = "text/plain";
-	int resp_status = 200;
+//	std::string body;
+//	std::string content_type = "text/plain";
+//	int resp_status = 200;
+//
+//	CgiHandler handler;
+//	handler.setPythonInterpreter("/usr/bin/python3");
+//	handler.setDocumentRoot(path);
+//	connection.request.body = query;
+//	connection.request.cgi = Python;
+//	body = handler.handleRequest(connection, "cgi-bin/env.py");
+//	std::cout << body << std::endl;
+//
+//	connection.out_buf += buildResponse(resp_status, body, connection.keep_alive, "Content-Type: text/html\r\n\r\n");
+//
+//	connection.state = Connection::WRITING;
+//	serverutil::resetRequest(connection);
+	if (!connection.cgi_request || connection.cgi_script_path.empty())
+	{
+		respondError(connection, 500);
+		return;
+	}
 
 	CgiHandler handler;
-	handler.setPythonInterpreter("/usr/bin/python3");
-	handler.setDocumentRoot(path);
-	connection.request.body = query;
-	connection.request.cgi = Python;
-	body = handler.handleRequest(connection, "cgi-bin/env.py");
-	std::cout << body << std::endl;
 
-	connection.out_buf += buildResponse(resp_status, body, connection.keep_alive, "Content-Type: text/html\r\n\r\n");
+	// Determine interpreter based on file extension
+	std::string ext = getFileExtension(connection.cgi_script_path);
+	if (ext == ".py")
+	{
+		handler.setPythonInterpreter("/usr/bin/python3");
+		connection.request.cgi = Python;
+	}
+	else if (ext == ".php")
+	{
+		handler.setPhpInterpreter("/usr/bin/php");
+		connection.request.cgi = PHP;
+	}
+	else if (ext == ".sh")
+	{
+		handler.setPythonInterpreter("/bin/sh");
+		connection.request.cgi = Shell;
+	}
+	else
+	{
+		// Default to Python or make it executable directly
+		handler.setPythonInterpreter("/usr/bin/python3");
+		connection.request.cgi = Python;
+	}
 
+	// Set CGI environment from configuration
+	const Config &cfg = serverutil::getConfigForConnection(connection, configs);
+	handler.setDocumentRoot(cfg.getRoot());
+	handler.setServerName(cfg.getServerName());
+	handler.setServerPort(cfg.getPort());
+
+	// Execute CGI script
+	std::string cgi_output = handler.handleRequest(connection, connection.cgi_script_path);
+
+	if (handler.hasError())
+	{
+		respondError(connection, 500);
+		return;
+	}
+
+	// Parse CGI output to separate headers and body
+	std::string headers;
+	std::string body;
+	size_t header_end = cgi_output.find("\r\n\r\n");
+	if (header_end == std::string::npos)
+	{
+		header_end = cgi_output.find("\n\n");
+		if (header_end != std::string::npos)
+		{
+			headers = cgi_output.substr(0, header_end);
+			body = cgi_output.substr(header_end + 2);
+		}
+		else
+		{
+			// No headers found, treat all as body
+			body = cgi_output;
+		}
+	}
+	else
+	{
+		headers = cgi_output.substr(0, header_end);
+		body = cgi_output.substr(header_end + 4);
+	}
+
+	// Build response
+	connection.out_buf += buildCgiResponse(headers, body, connection.keep_alive);
 	connection.state = Connection::WRITING;
 	serverutil::resetRequest(connection);
+	connection.resetCgiInfo();
 }
 
-void Server::handleReadyRequest(Connection &conn)
+void Server::handleReadyRequest(Connection &conn, std::vector<Config> configs)
 {
     std::string uri = stripQuery(conn.request.target).first;
 	std::string query = stripQuery(conn.request.target).second;
@@ -248,5 +324,5 @@ void Server::handleReadyRequest(Connection &conn)
 	if (query.empty())
 		serveStatic(conn, path, uri, index, autoindex);
 	else
-		serveCgi(conn, path, query);
+		serveCgi(conn, configs);
 }

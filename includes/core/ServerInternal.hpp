@@ -1,6 +1,7 @@
 #ifndef SERVER_INTERNAL_HPP
 #define SERVER_INTERNAL_HPP
 
+#include "config/Config.hpp"
 #include "core/Connection.hpp"
 #include "io/FileSystem.hpp"
 #include "utils/Time.hpp"
@@ -112,6 +113,25 @@ namespace serverutil
         conn.body_bytes_read = 0;
         conn.body_bytes_expected = 0;
     }
+
+	inline Config getConfigForConnection(const Connection &conn,
+										 const std::vector<Config> &configs)
+	{
+		if (conn.config_index < configs.size())
+			return configs[conn.config_index];
+		return configs[0];
+	}
+
+	inline std::string trim(const std::string& str)
+	{
+		std::string::size_type first = str.find_first_not_of(" \t\n\r\f\v");
+		if (first == std::string::npos)
+			return "";
+
+		std::string::size_type last = str.find_last_not_of(" \t\n\r\f\v");
+		return str.substr(first, (last - first + 1));
+	}
+
 }
 
 #endif

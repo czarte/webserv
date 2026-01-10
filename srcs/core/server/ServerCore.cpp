@@ -12,6 +12,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "io/NonBlocking.hpp"
 
 namespace
 {
@@ -46,14 +47,6 @@ Server::~Server()
         close(*it);
 }
 
-void Server::setNonBlocking(int fd)
-{
-    int flags = fcntl(fd, F_GETFL, 0);
-    if (flags == -1)
-        flags = 0;
-    fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-}
-
 void Server::initListeningSockets(const Config &config, size_t config_index)
 {
     struct addrinfo hints;
@@ -77,7 +70,12 @@ void Server::initListeningSockets(const Config &config, size_t config_index)
         if (setsockopt(sock.get(), SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
             continue;
 
-        setNonBlocking(sock.get());
+		int client_fd = sock.get();
+		if (makeNonBlocking(client_fd) == -1)
+		{
+			close(client_fd);
+			continue;  // Skip this client but continue accepting others
+		}
 
         if (bind(sock.get(), p->ai_addr, p->ai_addrlen) < 0)
             continue;

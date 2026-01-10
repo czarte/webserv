@@ -1,28 +1,32 @@
 #include "config/Location.hpp"
 
 Location::Location()
-    : _path(),
-      _root(),
-      _index(),
-      _autoindex(false),
-      _allowed_methods(),
-      _redirect(),
-      _cgi_path(),
-      _cgi_ext(),
-      _upload_path()
+    : 	_path(),
+		_root(),
+		_alias(),
+		_index(),
+		_autoindex(false),
+		_allowed_methods(),
+		_redirect(),
+		_cgi_path(),
+		_cgi_ext(),
+		_upload_path(),
+		_cgi_enabled(false)
 {
 }
 
 Location::Location(const std::string& path)
     : _path(path),
       _root(),
+	  _alias(),
       _index(),
       _autoindex(false),
       _allowed_methods(),
       _redirect(),
       _cgi_path(),
       _cgi_ext(),
-      _upload_path()
+      _upload_path(),
+	  _cgi_enabled(false)
 {
 }
 
@@ -39,6 +43,11 @@ std::string Location::getPath() const
 std::string Location::getRoot() const
 {
     return _root;
+}
+
+std::string Location::getAlias() const
+{
+	return _alias;
 }
 
 std::string Location::getIndex() const
@@ -74,6 +83,24 @@ std::vector<std::string> Location::getCgiExt() const
 std::string Location::getUploadPath() const
 {
     return _upload_path;
+}
+
+bool Location::isCgiEnabled() const
+{
+	return _cgi_enabled;
+}
+
+std::string Location::getCgiBinPath() const
+{
+	// If alias is set, use it as the CGI bin path
+	// Otherwise, combine root with cgi_path
+	if (!_alias.empty())
+		return _alias;
+	else if (!_root.empty() && !_cgi_path.empty())
+		return _root + "/" + _cgi_path[0];
+	else if (!_cgi_path.empty())
+		return _cgi_path[0];
+	return "";
 }
 
 // Setters
@@ -120,4 +147,9 @@ void Location::addCgiExt(const std::string& cgi_ext)
 void Location::setUploadPath(const std::string& upload_path)
 {
     _upload_path = upload_path;
+}
+
+void Location::setCgiEnabled(bool enabled)
+{
+	_cgi_enabled = enabled;
 }

@@ -7,6 +7,7 @@
 
 #include <sys/socket.h>
 #include <unistd.h>
+#include "io/NonBlocking.hpp"
 
 void Server::handleListeningEvent(int fd)
 {
@@ -15,7 +16,11 @@ void Server::handleListeningEvent(int fd)
         int client_fd = accept(fd, 0, 0);
         if (client_fd < 0)
             break;
-        setNonBlocking(client_fd);
+		if (makeNonBlocking(client_fd) == -1)
+		{
+			close(client_fd);
+			continue;  // Skip this client but continue accepting others
+		}
         Connection conn(client_fd);
         conn.last_activity_ms = now_ms();
         conn.header_start_ms = conn.last_activity_ms;
@@ -91,7 +96,7 @@ void Server::handleClientRead(int fd)
                         break;
                     conn.state = Connection::READING_HEADERS;
                 }
-                handleReadyRequest(conn);
+                handleReadyRequest(conn, _configs);
                 if (conn.state == Connection::WRITING)
                     break;
                 continue;
@@ -149,7 +154,7 @@ void Server::handleClientRead(int fd)
                 continue;
             }
 
-            handleReadyRequest(conn);
+            handleReadyRequest(conn, _configs);
             if (conn.state == Connection::WRITING)
                 break;
         }

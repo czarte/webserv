@@ -122,26 +122,79 @@ std::string CgiProcess::execute()
 
 void CgiProcess::handleChildProcess(int inputPipe[2], int outputPipe[2])
 {
-    // Redirect stdin to read from input pipe
-    dup2(inputPipe[0], STDIN_FILENO);
-    close(inputPipe[0]);
-    close(inputPipe[1]);
+	// Redirect stdin to read from input pipe
+	if (dup2(inputPipe[0], STDIN_FILENO) == -1)
+	{
+		// Write error to stderr before exiting
+		perror("dup2 stdin failed");
+		_exit(127);  // Use _exit in child process
+	}
+	close(inputPipe[0]);
+	close(inputPipe[1]);
 
-    // Redirect stdout to write to output pipe
-    dup2(outputPipe[1], STDOUT_FILENO);
-    close(outputPipe[0]);
-    close(outputPipe[1]);
+	// Redirect stdout to write to output pipe
+	if (dup2(outputPipe[1], STDOUT_FILENO) == -1)
+	{
+		perror("dup2 stdout failed");
+		_exit(127);
+	}
+	close(outputPipe[0]);
+	close(outputPipe[1]);
 
-    // Prepare environment and arguments
-    char** env = createEnvironmentArray();
-    char** argv = createArgvArray();
+	// Close all other file descriptors to prevent leaks
+	// This is important for security and resource management
+	int max_fd = sysconf(_SC_OPEN_MAX);
+	for (int fd = 3; fd < max_fd; fd++)
+	{
+		close(fd);  // Ignore errors, some fds might not be open
+	}
 
-    // Execute the script
-    execve(_interpreterPath.c_str(), argv, env);
+	// Prepare environment and arguments
+	char** env = createEnvironmentArray();
+	if (!env)
+	{
+		const char* msg = "Failed to create environment array\n";
+		write(STDERR_FILENO, msg, strlen(msg));
+		_exit(126);
+	}
 
-    // If execve returns, it failed
-    freeEnvironmentArray(env);
-    freeArgvArray(argv);
+	char** argv = createArgvArray();
+	if (!argv)
+	{
+		freeEnvironmentArray(env);
+		const char* msg = "Failed to create argv array\n";
+		write(STDERR_FILENO, msg, strlen(msg));
+		_exit(126);
+	}
+
+	// Execute the script
+	execve(_interpreterPath.c_str(), argv, env);
+
+	// If we reach here, execve failed
+	// Save errno before any other system calls
+	int saved_errno = errno;
+
+	// Clean up memory (though process will exit anyway)
+	freeEnvironmentArray(env);
+	freeArgvArray(argv);
+
+	// Write error message to stderr
+	const char* msg = "execve failed: ";
+	write(STDERR_FILENO, msg, strlen(msg));
+	write(STDERR_FILENO, _interpreterPath.c_str(), _interpreterPath.length());
+	write(STDERR_FILENO, ": ", 2);
+	write(STDERR_FILENO, strerror(saved_errno), strlen(strerror(saved_errno)));
+	write(STDERR_FILENO, "\n", 1);
+
+	// Exit with appropriate error code
+	// 126: Command found but not executable
+	// 127: Command not found
+	if (saved_errno == ENOENT)
+		_exit(127);  // Command not found
+	else if (saved_errno == EACCES)
+		_exit(126);  // Permission denied
+	else
+		_exit(125);  // Other exec error
 }
 
 char** CgiProcess::createEnvironmentArray()
