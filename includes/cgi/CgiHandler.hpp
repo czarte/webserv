@@ -3,7 +3,7 @@
 
 #include <string>
 #include <map>
-#include "http/Request.hpp"
+#include "core/Connection.hpp"
 
 class CgiHandler
 {
@@ -12,7 +12,7 @@ public:
     ~CgiHandler();
 
     // Main method to handle CGI request
-    std::string handleRequest(const Request& request, const std::string& scriptPath);
+    std::string handleRequest(const Connection& connection, const std::string& scriptPath);
 
     // Configuration methods
     void setPythonInterpreter(const std::string& path);

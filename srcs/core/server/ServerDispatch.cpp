@@ -177,6 +177,26 @@ namespace
     }
 }
 
+void serveCgi(Connection &connection, const std::string &path, const std::string &query)
+{
+	std::string body;
+	std::string content_type = "text/plain";
+	int resp_status = 200;
+
+	CgiHandler handler;
+	handler.setPythonInterpreter("/usr/bin/python3");
+	handler.setDocumentRoot(path);
+	connection.request.body = query;
+	connection.request.cgi = Python;
+	body = handler.handleRequest(connection, "cgi-bin/env.py");
+	std::cout << body << std::endl;
+
+	connection.out_buf += buildResponse(resp_status, body, connection.keep_alive, "Content-Type: text/html\r\n\r\n");
+
+	connection.state = Connection::WRITING;
+	serverutil::resetRequest(connection);
+}
+
 void Server::handleReadyRequest(Connection &conn)
 {
     std::string uri = stripQuery(conn.request.target).first;
@@ -228,10 +248,5 @@ void Server::handleReadyRequest(Connection &conn)
 	if (query.empty())
 		serveStatic(conn, path, uri, index, autoindex);
 	else
-	{
-		CgiHandler handler;
-		handler.setPythonInterpreter("/usr/bin/python3");
-		handler.setDocumentRoot(path);
-		std::string response = handler.handleRequest(conn.request, "/cgi-bin/echo.py");
-	}
+		serveCgi(conn, path, query);
 }

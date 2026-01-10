@@ -17,7 +17,7 @@ CgiHandler::~CgiHandler()
 {
 }
 
-std::string CgiHandler::handleRequest(const Request& request, const std::string& scriptPath)
+std::string CgiHandler::handleRequest(const Connection& connection, const std::string& scriptPath)
 {
     _hasError = false;
     _errorMessage.clear();
@@ -29,7 +29,7 @@ std::string CgiHandler::handleRequest(const Request& request, const std::string&
     cgiProcess.setScript(scriptPath);
 
     // Determine and set interpreter based on CGI method
-    std::string interpreterPath = getInterpreterPath(request.cgi);
+    std::string interpreterPath = getInterpreterPath(connection.request.cgi);
     if (interpreterPath.empty())
     {
         _hasError = true;
@@ -39,13 +39,13 @@ std::string CgiHandler::handleRequest(const Request& request, const std::string&
     cgiProcess.setInterpreter(interpreterPath);
 
     // Build CGI environment variables
-    std::map<std::string, std::string> cgiEnv = buildCgiEnvironment(request, scriptPath);
+    std::map<std::string, std::string> cgiEnv = buildCgiEnvironment(connection.request, scriptPath);
     cgiProcess.setEnvironment(cgiEnv);
 
     // If POST request with body, set input data
-    if (request.method_enum == METHOD_POST && !request.body.empty())
+    if (connection.request.method_enum == METHOD_POST && !connection.request.body.empty())
     {
-        cgiProcess.setInputData(request.body);
+        cgiProcess.setInputData(connection.request.body);
     }
 
     // Execute the CGI script

@@ -53,6 +53,7 @@ private:
     std::string _index;
     ErrorPage _error_page;
     std::vector<Location> _locations;
+
 };
 
 #endif
