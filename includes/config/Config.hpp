@@ -33,6 +33,7 @@ public:
     std::string getIndex() const;
     ErrorPage getErrorPage() const;
     std::vector<Location> getLocations() const;
+	std::vector<Location> getLocations();
     
     // Setters
     void setPort(int port);
@@ -43,6 +44,7 @@ public:
     void setIndex(const std::string& index);
     void setErrorPage(const ErrorPage& error_page);
     void addLocation(const Location& location);
+	void logDebug() const;
 
 private:
     int _port;

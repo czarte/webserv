@@ -114,6 +114,11 @@ void Location::setRoot(const std::string& root)
     _root = root;
 }
 
+void Location::setAlias(const std::string& alias)
+{
+	_alias = alias;
+}
+
 void Location::setIndex(const std::string& index)
 {
     _index = index;

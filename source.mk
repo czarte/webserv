@@ -33,6 +33,7 @@ CGI_SRCS := \
 
 UTIL_SRCS := \
 	srcs/utils/Log.cpp \
+	srcs/utils/Logger.cpp \
 	srcs/utils/String.cpp \
 	srcs/utils/Time.cpp \
 	srcs/utils/Path.cpp

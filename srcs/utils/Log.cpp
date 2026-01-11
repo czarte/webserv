@@ -1,12 +1,12 @@
 #include "utils/Log.hpp"
-#include <iostream>
+#include "utils/Logger.hpp"
 
 void logutil::info(const char *msg)
 {
-    std::cout << msg << std::endl;
+	Logger::Info(msg);
 }
 
 void logutil::error(const char *msg)
 {
-    std::cerr << msg << std::endl;
+	Logger::Error(msg);
 }

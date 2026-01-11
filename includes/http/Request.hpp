@@ -34,6 +34,7 @@ public:
     size_t content_length;
     bool has_body;
     std::string body;
+	std::string query;
 	CGIMethod cgi;
 };
 

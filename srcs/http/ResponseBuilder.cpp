@@ -1,5 +1,6 @@
 #include "http/ResponseBuilder.hpp"
 #include "core/ServerInternal.hpp"
+#include "utils/Logger.hpp"
 
 #include <cctype>
 #include <sstream>
@@ -25,7 +26,7 @@ const char *statusMessage(int status)
     case 404: return "Not Found";
     case 405: return "Method Not Allowed";
     case 413: return "Payload Too Large";
-    case 500: return "Internal Server Error";
+    case 500: return "Internal Server Error statusMessage";
     default:  return "Error";
     }
 }
@@ -67,10 +68,12 @@ std::string buildResponse(int status, const std::string &body, bool keep_alive,
     return out.str();
 }
 
-std::string buildErrorResponse(int status, bool keep_alive)
+std::string buildErrorResponse(int status, bool keep_alive, std::string message)
 {
     std::string body = statusMessage(status);
     body += "\n";
+	body += message;
+	body += "\n";
     return buildResponse(status, body, keep_alive, "text/plain");
 }
 
@@ -142,7 +145,9 @@ std::string buildCgiResponse(const std::string &cgi_headers, const std::string &
 std::string getFileExtension(const std::string &path)
 {
 	size_t dot_pos = path.find_last_of('.');
-	if (dot_pos != std::string::npos)
-		return path.substr(dot_pos);
-	return "";
+	std::string fromdot = path.substr(dot_pos);
+	size_t and_pos = fromdot.find_first_of('&');
+	if (and_pos == std::string::npos)
+		return fromdot;
+	return fromdot.substr(0, and_pos);
 }

@@ -127,7 +127,7 @@ void Server::handleClientRead(int fd)
             if (result == Parser::PARSE_ERROR || status != 200)
             {
                 conn.keep_alive = false;
-                conn.out_buf += buildErrorResponse(status, false);
+                conn.out_buf += buildErrorResponse(status, false, "Parser::PARSE_ERROR");
                 conn.state = Connection::WRITING;
                 break;
             }
@@ -140,7 +140,7 @@ void Server::handleClientRead(int fd)
                 && conn.request.content_length > static_cast<size_t>(cfg.getClientMaxBodySize()))
             {
                 conn.keep_alive = false;
-                conn.out_buf += buildErrorResponse(413, false);
+                conn.out_buf += buildErrorResponse(413, false, "MAX BODY SIZE exceeded");
                 conn.state = Connection::WRITING;
                 serverutil::resetRequest(conn);
                 break;

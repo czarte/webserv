@@ -46,5 +46,7 @@ struct Connection
 	}
 };
 
+void logConnection(const Connection& conn);
+
 
 #endif

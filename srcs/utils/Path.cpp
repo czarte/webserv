@@ -1,9 +1,10 @@
 #include "utils/Path.hpp"
+#include "utils/Logger.hpp"
 #include <iostream>
 
 std::pair<std::string, std::string> stripQuery(const std::string &target)
 {
-	std::cout << target << std::endl;
+	LOG_DBG << target;
     std::string::size_type q = target.find_first_of("?#");
     if (q == std::string::npos)
 		return std::make_pair(target.substr(0, q), "");
@@ -12,7 +13,7 @@ std::pair<std::string, std::string> stripQuery(const std::string &target)
 
 std::string joinPath(const std::string &root, const std::string &path)
 {
-	std::cout << root << " " << path << std::endl;
+	LOG_DBG << root << " " << path;
     if (root.empty())
         return path;
     if (path.empty())

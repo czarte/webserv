@@ -7,7 +7,7 @@
 
 std::string buildResponse(int status, const std::string &body, bool keep_alive,
                           const std::string &content_type);
-std::string buildErrorResponse(int status, bool keep_alive);
+std::string buildErrorResponse(int status, bool keep_alive, std::string message);
 std::string contentTypeForPath(const std::string &path);
 bool determineCgiRequest(Connection &conn, const Location *loc, const std::string &uri);
 std::string getFileExtension(const std::string &path);

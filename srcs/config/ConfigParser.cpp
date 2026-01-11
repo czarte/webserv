@@ -1,7 +1,9 @@
 #include "config/ConfigParser.hpp"
+#include "utils/Logger.hpp"
 #include <stdexcept>
 #include <cstdlib>
 #include <cctype>
+#include <iostream>
 
 ConfigParser::ConfigParser() : _current_file(), _current_line(0)
 {
@@ -179,6 +181,7 @@ void ConfigParser::parseLocationBlock(std::vector<std::string>& lines, size_t& i
         }
         
         parseLocationDirective(tokens[0], tokens, location);
+		LOG_DBG << "parseLocationDirective: " << location.isCgiEnabled();
         index++;
     }
     
@@ -290,6 +293,14 @@ void ConfigParser::parseLocationDirective(const std::string& directive, const st
         }
         location.setRoot(tokens[1]);
     }
+	else if (directive == "alias")
+	{
+		if (tokens.size() < 2)
+		{
+			throwError("alias directive requires a value", _current_line);
+		}
+		location.setAlias(tokens[1]);
+	}
     else if (directive == "index")
     {
         if (tokens.size() < 2)
@@ -304,6 +315,7 @@ void ConfigParser::parseLocationDirective(const std::string& directive, const st
 		{
 			throwError("cgi directive requires a value (on/off)", _current_line);
 		}
+		LOG_DBG << "parsing conf: cgi: " << tokens[1];
 		location.setCgiEnabled(tokens[1] == "on");
 	}
     else if (directive == "autoindex")

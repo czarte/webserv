@@ -1,17 +1,19 @@
 #include "core/Server.hpp"
 #include "core/ServerInternal.hpp"
 #include "http/ResponseBuilder.hpp"
+#include "utils/Logger.hpp"
 #include "utils/Path.hpp"
 #include "io/FileSystem.hpp"
 #include "config/Route.hpp"
 #include "cgi/CgiHandler.hpp"
+#include "core/Connection.hpp"
 #include <iostream>
 
 namespace
 {
-    void respondError(Connection &conn, int status)
+    void respondError(Connection &conn, int status, std::string message)
     {
-        conn.out_buf += buildErrorResponse(status, conn.keep_alive);
+        conn.out_buf += buildErrorResponse(status, conn.keep_alive, message);
         conn.state = Connection::WRITING;
         serverutil::resetRequest(conn);
     }
@@ -33,12 +35,12 @@ namespace
             upload_root = loc->getUploadPath();
         if (upload_root.empty())
         {
-            respondError(conn, 403);
+            respondError(conn, 403, "upload_root.empty()");
             return true;
         }
         if (!isDirectory(upload_root))
         {
-            respondError(conn, 500);
+            respondError(conn, 500, "!isDirectory(upload_root)");
             return true;
         }
         std::string name = serverutil::lastPathSegment(uri);
@@ -47,12 +49,12 @@ namespace
         std::string out_path = joinPath(upload_root, name);
         if (!serverutil::isPathWithinRoot(upload_root, out_path))
         {
-            respondError(conn, 403);
+            respondError(conn, 403, "!serverutil::isPathWithinRoot(upload_root, out_path)");
             return true;
         }
         if (!writeFile(out_path, conn.request.body))
         {
-            respondError(conn, 500);
+            respondError(conn, 500, "!writeFile(out_path, conn.request.body)");
             return true;
         }
         respondText(conn, 201, "Created\n");
@@ -74,12 +76,12 @@ namespace
         }
         if (delete_root.empty())
         {
-            respondError(conn, 403);
+            respondError(conn, 403, "delete_root.empty()");
             return true;
         }
         if (use_upload_root && !isDirectory(delete_root))
         {
-            respondError(conn, 500);
+            respondError(conn, 500, "use_upload_root && !isDirectory(delete_root)");
             return true;
         }
 
@@ -89,7 +91,7 @@ namespace
             std::string name = serverutil::lastPathSegment(uri);
             if (name.empty())
             {
-                respondError(conn, 403);
+                respondError(conn, 403, "name.empty()");
                 return true;
             }
             delete_path = joinPath(delete_root, name);
@@ -100,23 +102,23 @@ namespace
         }
         if (!serverutil::isPathWithinRoot(delete_root, delete_path))
         {
-            respondError(conn, 403);
+            respondError(conn, 403, "!serverutil::isPathWithinRoot(delete_root, delete_path)");
             return true;
         }
 
         if (isDirectory(delete_path))
         {
-            respondError(conn, 403);
+            respondError(conn, 403, "isDirectory(delete_path)");
             return true;
         }
         if (!isFile(delete_path))
         {
-            respondError(conn, 404);
+            respondError(conn, 404, "!isFile(delete_path)");
             return true;
         }
         if (!deleteFile(delete_path))
         {
-            respondError(conn, 500);
+            respondError(conn, 500, "!deleteFile(delete_path)");
             return true;
         }
         respondText(conn, 200, "OK\n");
@@ -168,7 +170,7 @@ namespace
         }
 
         if (resp_status != 200)
-            respondError(conn, resp_status);
+            respondError(conn, resp_status, "resp_status != 200");
         else
             conn.out_buf += buildResponse(200, body, conn.keep_alive, content_type);
 
@@ -195,16 +197,20 @@ void serveCgi(Connection &connection, std::vector<Config> configs)
 //
 //	connection.state = Connection::WRITING;
 //	serverutil::resetRequest(connection);
-	if (!connection.cgi_request || connection.cgi_script_path.empty())
-	{
-		respondError(connection, 500);
-		return;
-	}
+//	if (!connection.cgi_request || connection.cgi_script_path.empty())
+//	{
+//		respondError(connection, 500, "!connection.cgi_request || connection.cgi_script_path.empty()");
+//		return;
+//	}
+
+
 
 	CgiHandler handler;
 
 	// Determine interpreter based on file extension
-	std::string ext = getFileExtension(connection.cgi_script_path);
+	LOG_DBG << "HERE";
+	std::string ext = getFileExtension(connection.request.query);
+	LOG_DBG << "HERE";
 	if (ext == ".py")
 	{
 		handler.setPythonInterpreter("/usr/bin/python3");
@@ -227,6 +233,7 @@ void serveCgi(Connection &connection, std::vector<Config> configs)
 		connection.request.cgi = Python;
 	}
 
+
 	// Set CGI environment from configuration
 	const Config &cfg = serverutil::getConfigForConnection(connection, configs);
 	handler.setDocumentRoot(cfg.getRoot());
@@ -234,11 +241,12 @@ void serveCgi(Connection &connection, std::vector<Config> configs)
 	handler.setServerPort(cfg.getPort());
 
 	// Execute CGI script
-	std::string cgi_output = handler.handleRequest(connection, connection.cgi_script_path);
+	std::string script_name = handler.getScriptName(connection.request.query);
+	std::string cgi_output = handler.handleRequest(connection, connection.cgi_script_path + "/" + script_name);
 
 	if (handler.hasError())
 	{
-		respondError(connection, 500);
+		respondError(connection, 500, "handler.hasError()");
 		return;
 	}
 
@@ -276,52 +284,111 @@ void serveCgi(Connection &connection, std::vector<Config> configs)
 void Server::handleReadyRequest(Connection &conn, std::vector<Config> configs)
 {
     std::string uri = stripQuery(conn.request.target).first;
-	std::string query = stripQuery(conn.request.target).second;
+	conn.request.query = stripQuery(conn.request.target).second;
     if (uri.empty())
         uri = "/";
 
     const Config &cfg = (conn.config_index < _configs.size())
         ? _configs[conn.config_index]
         : _configs[0];
-    const Location *loc = matchLocation(cfg, uri);
+	LOG_DBG << "handleReadyRequest uri: " << uri;
+    Location loc = matchLocation(cfg, uri);
+	LOG_DBG << "handleReadyRequest matchLocation result: " << loc.getCgiBinPath();
+	cfg.logDebug();
 
-    if (loc && !serverutil::isMethodAllowed(loc->getAllowedMethods(), conn.request.method))
+    if (!serverutil::isMethodAllowed(loc.getAllowedMethods(), conn.request.method))
     {
-        respondError(conn, 405);
+        respondError(conn, 405, "loc && !serverutil::isMethodAllowed(loc->getAllowedMethods(), conn.request.method)");
         return;
     }
 
     if (hasTraversal(uri))
     {
-        respondError(conn, 403);
+        respondError(conn, 403, "hasTraversal(uri)");
         return;
     }
     std::string root = cfg.getRoot();
     std::string index = cfg.getIndex();
     bool autoindex = false;
-    if (loc)
-    {
-        if (!loc->getRoot().empty())
-            root = loc->getRoot();
-        if (!loc->getIndex().empty())
-            index = loc->getIndex();
-        autoindex = loc->getAutoindex();
-    }
+	std::string alias;
+	if (!loc.getRoot().empty())
+		root = loc.getRoot();
+	if (!loc.getIndex().empty())
+		index = loc.getIndex();
+	if (!loc.getAlias().empty())
+		alias = loc.getAlias();
+	autoindex = loc.getAutoindex();
 
-    std::string path = joinPath(root, uri);
+	std::string path;
+	if (!alias.empty())
+	{
+		// Alias replaces the location path prefix
+		std::string remainder = uri.substr(loc.getPath().size());
+		path = joinPath(alias, remainder);
+		LOG_DBG << "!alias.empty() " << path;
+	}
+	else
+	{
+		path = joinPath(root, uri);
+	}
 
-    if (handleUpload(conn, loc, uri))
+	conn.cgi_request = false;  // Reset first
+	conn.location = &loc;       // Store location pointer
+	if (loc.isCgiEnabled())
+	{
+		// Check if request targets a CGI script
+		std::string ext = getFileExtension(conn.request.query);
+		LOG_DBG << "ext " << ext;
+		std::vector<std::string> cgi_exts = loc.getCgiExt();
+		for (size_t i = 0; i < cgi_exts.size(); ++i) {
+				LOG_DBG << "getCgiExt " << cgi_exts[i];
+		}
+		// If no extensions configured, allow common CGI extensions
+		if (cgi_exts.empty())
+		{
+			if (ext == ".py" || ext == ".php" || ext == ".sh" || ext == ".cgi")
+			{
+				conn.cgi_request = true;
+
+			}
+			if (ext == ".py")
+				conn.request.cgi = Python;
+		}
+		else
+		{
+			// Check against configured extensions
+			for (size_t i = 0; i < cgi_exts.size(); ++i)
+			{
+				if (ext == cgi_exts[i])
+				{
+					conn.cgi_request = true;
+					break;
+				}
+			}
+		}
+
+		if (conn.cgi_request)
+		{
+			conn.cgi_script_path = path;
+			LOG_DBG << "LOG_DBG cgi_script_path " << path;
+			conn.cgi_bin_path = !alias.empty() ? alias : loc.getCgiBinPath();
+			// Extract PATH_INFO if there's additional path after script
+			conn.cgi_path_info = ""; // Can be enhanced later
+		}
+	}
+
+    if (handleUpload(conn, &loc, uri))
         return;
-    if (handleDelete(conn, loc, root, path, uri))
+    if (handleDelete(conn, &loc, root, path, uri))
         return;
 
-    if (!serverutil::isPathWithinRoot(root, path))
-    {
-        respondError(conn, 403);
-        return;
-    }
-	std::cout << "request: " << path << " " << uri << " " << query << " " << index << " " << autoindex << std::endl;
-	if (query.empty())
+	std::vector<std::string> llc = conn.location->getCgiPath();
+	for (size_t i = 0; i < llc.size(); i++) {
+		LOG_DBG << "llc" << llc[i];
+	}
+
+	LOG_DBG << "request: " << path << " " << uri << " " << conn.request.query << " " << index << " " << autoindex;
+	if (!conn.cgi_request)
 		serveStatic(conn, path, uri, index, autoindex);
 	else
 		serveCgi(conn, configs);

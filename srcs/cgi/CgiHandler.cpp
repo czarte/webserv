@@ -1,5 +1,6 @@
 #include "cgi/CgiHandler.hpp"
 #include "cgi/CgiProcess.hpp"
+#include "utils/Logger.hpp"
 #include <sstream>
 #include <cstdlib>
 
@@ -21,6 +22,8 @@ std::string CgiHandler::handleRequest(const Connection& connection, const std::s
 {
     _hasError = false;
     _errorMessage.clear();
+
+	LOG_DBG << "handleRequest " << connection.request.cgi;
 
     // Create CGI process
     CgiProcess cgiProcess;
@@ -206,7 +209,7 @@ std::string CgiHandler::extractPathInfo(const std::string& target)
 
 std::string CgiHandler::getScriptName(const std::string& scriptPath)
 {
-    size_t pos = scriptPath.rfind('/');
+    size_t pos = scriptPath.rfind('?');
     if (pos != std::string::npos)
         return scriptPath.substr(pos + 1);
     return scriptPath;

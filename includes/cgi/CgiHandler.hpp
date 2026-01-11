@@ -15,6 +15,7 @@ public:
     std::string handleRequest(const Connection& connection, const std::string& scriptPath);
 
     // Configuration methods
+	std::string getScriptName(const std::string& scriptPath);
     void setPythonInterpreter(const std::string& path);
     void setPhpInterpreter(const std::string& path);
     void setDocumentRoot(const std::string& root);
@@ -39,7 +40,6 @@ private:
     std::string getInterpreterPath(CGIMethod method);
     std::string extractQueryString(const std::string& target);
     std::string extractPathInfo(const std::string& target);
-    std::string getScriptName(const std::string& scriptPath);
     void parseUrlParameters(const std::string& queryString, std::map<std::string, std::string>& env);
 };
 

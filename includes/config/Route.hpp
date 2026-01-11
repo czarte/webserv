@@ -5,6 +5,6 @@
 #include "Location.hpp"
 #include <string>
 
-const Location *matchLocation(const Config &config, const std::string &target);
+Location matchLocation(const Config &config, const std::string &target);
 
 #endif // ROUTE_HPP

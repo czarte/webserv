@@ -1,4 +1,5 @@
 #include "core/Connection.hpp"
+#include "utils/Logger.hpp"
 
 Connection::Connection()
     : fd(-1)
@@ -34,4 +35,24 @@ Connection::Connection(int f)
     , body_bytes_read(0)
     , body_bytes_expected(0)
 {
+}
+
+void logConnection(const Connection& conn)
+{
+	LOG_DBG << "=== Connection Debug ==="
+			<< " fd=" << conn.fd
+			<< " state=" << (conn.state == Connection::READING_HEADERS ? "READING_HEADERS" :
+							 conn.state == Connection::READING_BODY ? "READING_BODY" : "WRITING")
+			<< " config_index=" << conn.config_index
+			<< " keep_alive=" << (conn.keep_alive ? "true" : "false")
+			<< " last_activity_ms=" << conn.last_activity_ms
+			<< " header_start_ms=" << conn.header_start_ms
+			<< " body_bytes_read=" << conn.body_bytes_read
+			<< " body_bytes_expected=" << conn.body_bytes_expected
+			<< " cgi_request=" << (conn.cgi_request ? "true" : "false")
+			<< " cgi_script_path=" << conn.cgi_script_path
+			<< " cgi_bin_path=" << conn.cgi_bin_path
+			<< " cgi_path_info=" << conn.cgi_path_info
+			<< " in_buf.size=" << conn.in_buf.size()
+			<< " out_buf.size=" << conn.out_buf.size();
 }
