@@ -46,7 +46,7 @@ Server::Server()
 
 Server::~Server()
 {
-    for (std::map<int, Connection>::iterator it = _clients.begin(); it != _clients.end(); ++it)
+    for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); ++it)
         close(it->first);
     for (std::vector<int>::iterator it = _listening_fds.begin(); it != _listening_fds.end(); ++it)
         close(*it);

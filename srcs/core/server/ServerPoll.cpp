@@ -14,7 +14,7 @@ void Server::buildPollFds(std::vector<struct pollfd> &pfds)
         pfds.push_back(pfd);
     }
 
-    for (std::map<int, Connection>::const_iterator it = _clients.begin(); it != _clients.end(); ++it)
+    for (std::map<int, Client>::const_iterator it = _clients.begin(); it != _clients.end(); ++it)
     {
         struct pollfd pfd;
         pfd.fd = it->first;
@@ -45,14 +45,14 @@ void Server::handlePollEvents(const std::vector<struct pollfd> &pfds)
             continue;
         }
 
-        std::map<int, Connection>::iterator client_it = _clients.find(it->fd);
+        std::map<int, Client>::iterator client_it = _clients.find(it->fd);
         if (client_it == _clients.end())
             continue;
 
         if (it->revents & POLLIN)
         {
-            if (client_it->second.state == Connection::READING_HEADERS
-                || client_it->second.state == Connection::READING_BODY)
+            if (client_it->second.state == Client::READING_HEADERS
+                || client_it->second.state == Client::READING_BODY)
                 handleClientRead(it->fd);
         }
 
@@ -79,10 +79,10 @@ void Server::run()
         if (ret <= 0)
             continue;
         handlePollEvents(pfds);
-        for (std::map<int, Connection>::iterator it = _clients.begin(); it != _clients.end(); )
+        for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); )
         {
-            Connection &conn = it->second;
-            if (conn.state == Connection::READING_HEADERS
+            Client &conn = it->second;
+            if (conn.state == Client::READING_HEADERS
                 && elapsed_ms(conn.header_start_ms) > serverutil::kHeaderTimeoutMs)
             {
                 int fd = it->first;
@@ -92,7 +92,7 @@ void Server::run()
             }
             ++it;
         }
-        for (std::map<int, Connection>::iterator it = _clients.begin(); it != _clients.end(); )
+        for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); )
         {
             if (elapsed_ms(it->second.last_activity_ms) > serverutil::kIdleTimeoutMs)
             {

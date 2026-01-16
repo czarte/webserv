@@ -3,7 +3,7 @@
 
 #include <string>
 #include <map>
-#include "core/Connection.hpp"
+#include "core/Client.hpp"
 
 class CgiHandler
 {
@@ -12,7 +12,7 @@ public:
     ~CgiHandler();
 
     // Main method to handle CGI request
-    std::string handleRequest(const Connection& connection, const std::string& scriptPath);
+    std::string handleRequest(const Client& connection, const std::string& scriptPath);
 
     // Configuration methods
 	std::string getScriptName(const std::string& scriptPath);

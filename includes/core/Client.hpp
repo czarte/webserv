@@ -1,5 +1,5 @@
-#ifndef CONNECTION_HPP
-#define CONNECTION_HPP
+#ifndef CLIENT_HPP
+#define CLIENT_HPP
 
 #include <cstddef>
 #include <string>
@@ -7,7 +7,7 @@
 #include "http/Request.hpp"
 #include "config/Location.hpp"
 
-struct Connection
+struct Client
 {
     enum State
 	{
@@ -33,8 +33,8 @@ struct Connection
 	std::string cgi_path_info;   // New: PATH_INFO for CGI
 	const Location* location;    // New: pointer to matched location
 
-    Connection();
-    explicit Connection(int f);
+    Client();
+    explicit Client(int f);
 
 	void resetCgiInfo()
 	{
@@ -46,7 +46,7 @@ struct Connection
 	}
 };
 
-void logConnection(const Connection& conn);
+void logClient(const Client& conn);
 
 
 #endif

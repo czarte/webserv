@@ -18,7 +18,7 @@ CgiHandler::~CgiHandler()
 {
 }
 
-std::string CgiHandler::handleRequest(const Connection& connection, const std::string& scriptPath)
+std::string CgiHandler::handleRequest(const Client& connection, const std::string& scriptPath)
 {
     _hasError = false;
     _errorMessage.clear();

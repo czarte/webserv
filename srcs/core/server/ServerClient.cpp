@@ -21,7 +21,7 @@ void Server::handleListeningEvent(int fd)
 			close(client_fd);
 			continue;  // Skip this client but continue accepting others
 		}
-        Connection conn(client_fd);
+        Client conn(client_fd);
         conn.last_activity_ms = now_ms();
         conn.header_start_ms = conn.last_activity_ms;
         std::map<int, size_t>::const_iterator cfg = _listen_config.find(fd);
@@ -39,11 +39,11 @@ void Server::closeClient(int fd)
 
 void Server::handleClientRead(int fd)
 {
-    std::map<int, Connection>::iterator it = _clients.find(fd);
+    std::map<int, Client>::iterator it = _clients.find(fd);
     if (it == _clients.end())
         return;
 
-    Connection &conn = it->second;
+    Client &conn = it->second;
 
     char buffer[4096];
 
@@ -77,12 +77,12 @@ void Server::handleClientRead(int fd)
         Parser parser;
         for (;;)
         {
-            if (conn.state == Connection::READING_BODY)
+            if (conn.state == Client::READING_BODY)
             {
                 size_t remaining = conn.body_bytes_expected - conn.body_bytes_read;
                 if (remaining == 0)
                 {
-                    conn.state = Connection::READING_HEADERS;
+                    conn.state = Client::READING_HEADERS;
                 }
                 else
                 {
@@ -94,10 +94,10 @@ void Server::handleClientRead(int fd)
                     conn.body_bytes_read += take;
                     if (conn.body_bytes_read < conn.body_bytes_expected)
                         break;
-                    conn.state = Connection::READING_HEADERS;
+                    conn.state = Client::READING_HEADERS;
                 }
                 handleReadyRequest(conn, _configs);
-                if (conn.state == Connection::WRITING)
+                if (conn.state == Client::WRITING)
                     break;
                 continue;
             }
@@ -128,7 +128,7 @@ void Server::handleClientRead(int fd)
             {
                 conn.keep_alive = false;
                 conn.out_buf += buildErrorResponse(status, false, "Parser::PARSE_ERROR");
-                conn.state = Connection::WRITING;
+                conn.state = Client::WRITING;
                 break;
             }
 
@@ -141,7 +141,7 @@ void Server::handleClientRead(int fd)
             {
                 conn.keep_alive = false;
                 conn.out_buf += buildErrorResponse(413, false, "MAX BODY SIZE exceeded");
-                conn.state = Connection::WRITING;
+                conn.state = Client::WRITING;
                 serverutil::resetRequest(conn);
                 break;
             }
@@ -150,12 +150,12 @@ void Server::handleClientRead(int fd)
             {
                 conn.body_bytes_expected = conn.request.content_length;
                 conn.body_bytes_read = 0;
-                conn.state = Connection::READING_BODY;
+                conn.state = Client::READING_BODY;
                 continue;
             }
 
             handleReadyRequest(conn, _configs);
-            if (conn.state == Connection::WRITING)
+            if (conn.state == Client::WRITING)
                 break;
         }
     }
@@ -163,11 +163,11 @@ void Server::handleClientRead(int fd)
 
 void Server::handleClientWrite(int fd)
 {
-    std::map<int, Connection>::iterator it = _clients.find(fd);
+    std::map<int, Client>::iterator it = _clients.find(fd);
     if (it == _clients.end())
         return;
 
-    Connection &conn = it->second;
+    Client &conn = it->second;
     ssize_t n = send(fd, conn.out_buf.c_str(), conn.out_buf.size(), 0);
     if (n < 0)
     {
@@ -191,7 +191,7 @@ void Server::handleClientWrite(int fd)
         if (conn.keep_alive)
         {
             conn.header_start_ms = now_ms();
-            conn.state = Connection::READING_HEADERS;
+            conn.state = Client::READING_HEADERS;
         }
         else
             closeClient(fd);

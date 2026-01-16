@@ -6,26 +6,26 @@
 #include "io/FileSystem.hpp"
 #include "config/Route.hpp"
 #include "cgi/CgiHandler.hpp"
-#include "core/Connection.hpp"
+#include "core/Client.hpp"
 #include <iostream>
 
 namespace
 {
-    void respondError(Connection &conn, int status, std::string message)
+    void respondError(Client &conn, int status, std::string message)
     {
         conn.out_buf += buildErrorResponse(status, conn.keep_alive, message);
-        conn.state = Connection::WRITING;
+        conn.state = Client::WRITING;
         serverutil::resetRequest(conn);
     }
 
-    void respondText(Connection &conn, int status, const char *body)
+    void respondText(Client &conn, int status, const char *body)
     {
         conn.out_buf += buildResponse(status, body, conn.keep_alive, "text/plain");
-        conn.state = Connection::WRITING;
+        conn.state = Client::WRITING;
         serverutil::resetRequest(conn);
     }
 
-    bool handleUpload(Connection &conn, const Location *loc, const std::string &uri)
+    bool handleUpload(Client &conn, const Location *loc, const std::string &uri)
     {
         if (conn.request.method_enum != METHOD_POST && conn.request.method_enum != METHOD_PUT)
             return false;
@@ -61,7 +61,7 @@ namespace
         return true;
     }
 
-    bool handleDelete(Connection &conn, const Location *loc, const std::string &root,
+    bool handleDelete(Client &conn, const Location *loc, const std::string &root,
                       const std::string &path, const std::string &uri)
     {
         if (conn.request.method_enum != METHOD_DELETE)
@@ -125,7 +125,7 @@ namespace
         return true;
     }
 
-    void serveStatic(Connection &conn, const std::string &path, const std::string &uri,
+    void serveStatic(Client &conn, const std::string &path, const std::string &uri,
                      const std::string &index, bool autoindex)
     {
         std::string body;
@@ -174,12 +174,12 @@ namespace
         else
             conn.out_buf += buildResponse(200, body, conn.keep_alive, content_type);
 
-        conn.state = Connection::WRITING;
+        conn.state = Client::WRITING;
         serverutil::resetRequest(conn);
     }
 }
 
-void serveCgi(Connection &connection, std::vector<Config> configs)
+void serveCgi(Client &connection, std::vector<Config> configs)
 {
 //	std::string body;
 //	std::string content_type = "text/plain";
@@ -276,12 +276,12 @@ void serveCgi(Connection &connection, std::vector<Config> configs)
 
 	// Build response
 	connection.out_buf += buildCgiResponse(headers, body, connection.keep_alive);
-	connection.state = Connection::WRITING;
+	connection.state = Client::WRITING;
 	serverutil::resetRequest(connection);
 	connection.resetCgiInfo();
 }
 
-void Server::handleReadyRequest(Connection &conn, std::vector<Config> configs)
+void Server::handleReadyRequest(Client &conn, std::vector<Config> configs)
 {
     std::string uri = stripQuery(conn.request.target).first;
 	conn.request.query = stripQuery(conn.request.target).second;

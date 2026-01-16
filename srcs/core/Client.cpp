@@ -1,7 +1,7 @@
-#include "core/Connection.hpp"
+#include "core/Client.hpp"
 #include "utils/Logger.hpp"
 
-Connection::Connection()
+Client::Client()
     : fd(-1)
     , in_buf()
     , out_buf()
@@ -22,7 +22,7 @@ Connection::Connection()
 {
 }
 
-Connection::Connection(int f)
+Client::Client(int f)
     : fd(f)
     , in_buf()
     , out_buf()
@@ -37,12 +37,12 @@ Connection::Connection(int f)
 {
 }
 
-void logConnection(const Connection& conn)
+void logClient(const Client& conn)
 {
-	LOG_DBG << "=== Connection Debug ==="
+	LOG_DBG << "=== Client Debug ==="
 			<< " fd=" << conn.fd
-			<< " state=" << (conn.state == Connection::READING_HEADERS ? "READING_HEADERS" :
-							 conn.state == Connection::READING_BODY ? "READING_BODY" : "WRITING")
+			<< " state=" << (conn.state == Client::READING_HEADERS ? "READING_HEADERS" :
+							 conn.state == Client::READING_BODY ? "READING_BODY" : "WRITING")
 			<< " config_index=" << conn.config_index
 			<< " keep_alive=" << (conn.keep_alive ? "true" : "false")
 			<< " last_activity_ms=" << conn.last_activity_ms

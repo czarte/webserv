@@ -2,7 +2,7 @@
 #define SERVER_INTERNAL_HPP
 
 #include "config/Config.hpp"
-#include "core/Connection.hpp"
+#include "core/Client.hpp"
 #include "io/FileSystem.hpp"
 #include "utils/Time.hpp"
 
@@ -107,14 +107,14 @@ namespace serverutil
         return isPathUnder(root_real, path_real);
     }
 
-    inline void resetRequest(Connection &conn)
+    inline void resetRequest(Client &conn)
     {
         conn.request = Request();
         conn.body_bytes_read = 0;
         conn.body_bytes_expected = 0;
     }
 
-	inline Config getConfigForConnection(const Connection &conn,
+	inline Config getConfigForConnection(const Client &conn,
 										 const std::vector<Config> &configs)
 	{
 		if (conn.config_index < configs.size())

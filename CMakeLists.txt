@@ -33,7 +33,7 @@ set(CORE_SRCS
         srcs/core/server/ServerClient.cpp
         srcs/core/server/ServerDispatch.cpp
         srcs/core/Fd.cpp
-        srcs/core/Connection.cpp
+        srcs/core/Client.cpp
         srcs/core/EventLoop.cpp
 )
 
