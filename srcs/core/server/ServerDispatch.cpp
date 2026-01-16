@@ -377,10 +377,14 @@ void Server::handleReadyRequest(Connection &conn, std::vector<Config> configs)
 		}
 	}
 
-    if (handleUpload(conn, &loc, uri))
-        return;
-    if (handleDelete(conn, &loc, root, path, uri))
-        return;
+	if (handleUpload(conn, &loc, uri))
+	{
+		return;
+	}
+	if (handleDelete(conn, &loc, root, path, uri))
+	{
+		return;
+	}
 
 	std::vector<std::string> llc = conn.location->getCgiPath();
 	for (size_t i = 0; i < llc.size(); i++) {

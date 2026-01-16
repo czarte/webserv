@@ -4,6 +4,8 @@
 #include <cstring>
 #include <cerrno>
 #include <sstream>
+#include <cstdlib>
+#include <cstdio>
 
 CgiProcess::CgiProcess()
     : _exitStatus(-1), _hasError(false)
@@ -107,7 +109,9 @@ std::string CgiProcess::execute()
             if (_exitStatus != 0)
             {
                 _hasError = true;
-                _errorMessage = "CGI script exited with status: " + std::to_string(_exitStatus);
+                std::ostringstream oss;
+                oss << _exitStatus;
+                _errorMessage = "CGI script exited with status: " + oss.str();
             }
         }
         else

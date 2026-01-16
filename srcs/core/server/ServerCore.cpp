@@ -14,6 +14,11 @@
 #include <unistd.h>
 #include "io/NonBlocking.hpp"
 
+namespace serverutil
+{
+	const char *kDefaultConfigPath = "conf/default.conf";
+}
+
 namespace
 {
     struct AddrInfoGuard

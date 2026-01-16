@@ -15,7 +15,7 @@
 
 namespace serverutil
 {
-    static const char *kDefaultConfigPath = "conf/default.conf";
+	extern const char *kDefaultConfigPath;
     static const size_t kHeaderTimeoutMs = 5000;
     static const size_t kIdleTimeoutMs = 15000;
 
