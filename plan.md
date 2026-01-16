@@ -172,3 +172,20 @@ Add higher-level features without modifying the execution model.
 - **CGI**: external process workers integrated via pipes
 
 This structure ensures correctness, scalability, and defendability during evaluation.
+
+
+Server = Master
+  vec<Worker> workers
+
+Worker = Server
+  vec<Connection = Client> connections
+  vec<Config> configs
+
+Connection
+  client_fd
+  buf_in
+  buf_out
+  vec<Request>
+
+Config
+  vec<Location> locations
