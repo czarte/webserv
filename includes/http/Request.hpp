@@ -35,6 +35,7 @@ public:
     bool has_body;
     std::string body;
 	std::string query;
+	std::string file_name;
 	CGIMethod cgi;
 };
 

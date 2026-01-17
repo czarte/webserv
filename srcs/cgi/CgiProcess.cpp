@@ -1,4 +1,5 @@
 #include "cgi/CgiProcess.hpp"
+#include "utils/Logger.hpp"
 #include <unistd.h>
 #include <sys/wait.h>
 #include <cstring>
@@ -155,6 +156,7 @@ void CgiProcess::handleChildProcess(int inputPipe[2], int outputPipe[2])
 
 	// Prepare environment and arguments
 	char** env = createEnvironmentArray();
+	LOG_DBG << "env: " << env;
 	if (!env)
 	{
 		const char* msg = "Failed to create environment array\n";

@@ -35,6 +35,8 @@ set(CORE_SRCS
         srcs/core/Fd.cpp
         srcs/core/Client.cpp
         srcs/core/EventLoop.cpp
+        srcs/core/Worker.cpp
+        includes/core/Worker.hpp
 )
 
 # HTTP sources

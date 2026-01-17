@@ -2,11 +2,10 @@
 CORE_SRCS := \
 	srcs/core/server/ServerCore.cpp \
 	srcs/core/server/ServerPoll.cpp \
-	srcs/core/server/ServerClient.cpp \
-	srcs/core/server/ServerDispatch.cpp \
 	srcs/core/Fd.cpp \
 	srcs/core/Client.cpp \
-	srcs/core/EventLoop.cpp
+	srcs/core/EventLoop.cpp \
+	srcs/core/Worker.cpp
 
 HTTP_SRCS := \
 	srcs/http/Parser.cpp \
