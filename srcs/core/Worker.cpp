@@ -208,7 +208,7 @@ namespace
 
 		// Determine interpreter based on file extension
 		LOG_DBG << "HERE";
-		std::string ext = getFileExtension(connection.request.query);
+		std::string ext = getFileExtension(connection.request.file_name);
 		LOG_DBG << "HERE";
 		if (ext == ".py")
 		{
@@ -238,7 +238,7 @@ namespace
 		handler.setServerPort(cfg.getPort());
 
 		// Execute CGI script
-		std::string script_name = handler.getScriptName(connection.request.query);
+		std::string script_name = handler.getScriptName(connection.request.file_name);
 		std::string cgi_output = handler.handleRequest(connection, connection.cgi_script_path + "/" + script_name);
 
 		if (handler.hasError())
@@ -531,15 +531,17 @@ void Worker::handleClientWrite(int fd)
 }
 
 // Handle a ready HTTP request
-void Worker::handleReadyRequest(Client &conn)
+void Worker::handleReadyRequest(Client &connection)
 {
-	std::string uri = stripQuery(conn.request.target).first;
-	std::string request = stripQuery(conn.request.target).second;
-	conn.request.query = stripFilename(request).first;
-	request = stripFilename(conn.request.target).second;
-	LOG_DBG << request;
+	std::string uri = stripQuery(connection.request.target).first;
+	std::string request = stripQuery(connection.request.target).second;
+	connection.request.file_name = stripFilename(request).first;
+	connection.request.query = stripFilename(connection.request.target).second;
 
-	LOG_DBG << "conn.request.query: " << conn.request.query;
+	LOG_DBG << "filename: " << connection.request.file_name;
+
+//	connection.cgi_script_path = connection.request.file_name;
+	LOG_DBG << "conn.request.query: " << connection.request.query;
 	if (uri.empty())
 		uri = "/";
 
@@ -548,15 +550,15 @@ void Worker::handleReadyRequest(Client &conn)
 	LOG_DBG << "handleReadyRequest matchLocation result: " << loc.getCgiBinPath();
 	_config.logDebug();
 
-	if (!serverutil::isMethodAllowed(loc.getAllowedMethods(), conn.request.method))
+	if (!serverutil::isMethodAllowed(loc.getAllowedMethods(), connection.request.method))
 	{
-		respondError(conn, 405, "loc && !serverutil::isMethodAllowed(loc->getAllowedMethods(), conn.request.method)");
+		respondError(connection, 405, "loc && !serverutil::isMethodAllowed(loc->getAllowedMethods(), conn.request.method)");
 		return;
 	}
 
 	if (hasTraversal(uri))
 	{
-		respondError(conn, 403, "hasTraversal(uri)");
+		respondError(connection, 403, "hasTraversal(uri)");
 		return;
 	}
 
@@ -586,13 +588,13 @@ void Worker::handleReadyRequest(Client &conn)
 		path = joinPath(root, uri);
 	}
 
-	conn.cgi_request = false;  // Reset first
-	conn.location = &loc;       // Store location pointer
+	connection.cgi_request = false;  // Reset first
+	connection.location = &loc;       // Store location pointer
 
 	if (loc.isCgiEnabled())
 	{
 		// Check if request targets a CGI script
-		std::string ext = getFileExtension(conn.request.query);
+		std::string ext = getFileExtension(connection.request.file_name);
 		LOG_DBG << "ext " << ext;
 		std::vector<std::string> cgi_exts = loc.getCgiExt();
 		for (size_t i = 0; i < cgi_exts.size(); ++i) {
@@ -604,10 +606,10 @@ void Worker::handleReadyRequest(Client &conn)
 		{
 			if (ext == ".py" || ext == ".php" || ext == ".sh" || ext == ".cgi")
 			{
-				conn.cgi_request = true;
+				connection.cgi_request = true;
 			}
 			if (ext == ".py")
-				conn.request.cgi = Python;
+				connection.request.cgi = Python;
 		}
 		else
 		{
@@ -616,42 +618,42 @@ void Worker::handleReadyRequest(Client &conn)
 			{
 				if (ext == cgi_exts[i])
 				{
-					conn.cgi_request = true;
+					connection.cgi_request = true;
 					break;
 				}
 			}
 		}
 
-		if (conn.cgi_request)
+		if (connection.cgi_request)
 		{
-			conn.cgi_script_path = path;
+			connection.cgi_script_path = path;
 			LOG_DBG << "LOG_DBG cgi_script_path " << path;
-			conn.cgi_bin_path = !alias.empty() ? alias : loc.getCgiBinPath();
+			connection.cgi_bin_path = !alias.empty() ? alias : loc.getCgiBinPath();
 			// Extract PATH_INFO if there's additional path after script
-			conn.cgi_path_info = ""; // Can be enhanced later
+			connection.cgi_path_info = ""; // Can be enhanced later
 		}
 	}
 
-	if (handleUpload(conn, &loc, uri))
+	if (handleUpload(connection, &loc, uri))
 	{
 		return;
 	}
-	if (handleDelete(conn, &loc, root, path, uri))
+	if (handleDelete(connection, &loc, root, path, uri))
 	{
 		return;
 	}
 
-	std::vector<std::string> llc = conn.location->getCgiPath();
+	std::vector<std::string> llc = connection.location->getCgiPath();
 	for (size_t i = 0; i < llc.size(); i++) {
 		LOG_DBG << "llc" << llc[i];
 	}
 
-	LOG_DBG << "request: " << path << " " << uri << " " << conn.request.query << " " << index << " " << autoindex;
+	LOG_DBG << "request: " << connection.request.target << " " << connection.request.file_name << " " << connection.request.query << " " << index << " " << autoindex;
 
-	if (!conn.cgi_request)
-		serveStatic(conn, path, uri, index, autoindex);
+	if (!connection.cgi_request)
+		serveStatic(connection, path, uri, index, autoindex);
 	else
-		serveCgi(conn, _config);
+		serveCgi(connection, _config);
 }
 
 // Add this worker's fds to poll array

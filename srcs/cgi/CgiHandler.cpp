@@ -52,6 +52,7 @@ std::string CgiHandler::handleRequest(const Client& connection, const std::strin
     }
 
     // Execute the CGI script
+	logClient(connection);
     std::string output = cgiProcess.execute();
 
     if (cgiProcess.hasError())
@@ -133,7 +134,7 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
     std::string pathInfo = extractPathInfo(request.target);
 
     env["REQUEST_URI"] = request.target;
-    env["QUERY_STRING"] = queryString;
+    env["QUERY_STRING"] = request.query;
     env["PATH_INFO"] = pathInfo;
     env["PATH_TRANSLATED"] = _documentRoot + pathInfo;
 

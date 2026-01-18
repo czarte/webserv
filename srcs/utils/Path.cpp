@@ -4,7 +4,7 @@
 
 std::pair<std::string, std::string> stripQuery(const std::string &target)
 {
-	LOG_DBG << target;
+	LOG_DBG << "stripQuery: " << target;
     std::string::size_type q = target.find_first_of("?#");
     if (q == std::string::npos)
 		return std::make_pair(target.substr(0, q), "");

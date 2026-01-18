@@ -24,7 +24,7 @@ public:
 	bool hasClient(int fd) const { return _clients.find(fd) != _clients.end(); }
 
 	// Request processing
-	void handleReadyRequest(Client &conn);
+	void handleReadyRequest(Client &connection);
 
 	// Poll support
 	void addToPollFds(std::vector<struct pollfd> &pfds) const;
