@@ -207,9 +207,8 @@ namespace
 		CgiHandler handler;
 
 		// Determine interpreter based on file extension
-		LOG_DBG << "HERE";
 		std::string ext = getFileExtension(connection.request.file_name);
-		LOG_DBG << "HERE";
+		LOG_DBG << "cgi: ext=" << ext;
 		if (ext == ".py")
 		{
 			handler.setPythonInterpreter("/usr/bin/python3");
@@ -237,9 +236,8 @@ namespace
 		handler.setServerName(cfg.getServerName());
 		handler.setServerPort(cfg.getPort());
 
-		// Execute CGI script
-		std::string script_name = handler.getScriptName(connection.request.file_name);
-		std::string cgi_output = handler.handleRequest(connection, connection.cgi_script_path + "/" + script_name);
+		// Execute CGI script (cgi_script_path already points to the script file)
+		std::string cgi_output = handler.handleRequest(connection, connection.cgi_script_path);
 
 		if (handler.hasError())
 		{
@@ -533,15 +531,15 @@ void Worker::handleClientWrite(int fd)
 // Handle a ready HTTP request
 void Worker::handleReadyRequest(Client &connection)
 {
-	std::string uri = stripQuery(connection.request.target).first;
-	std::string request = stripQuery(connection.request.target).second;
-	connection.request.file_name = stripFilename(request).first;
-	connection.request.query = stripFilename(connection.request.target).second;
+	std::pair<std::string, std::string> uri_query = stripQuery(connection.request.target);
+	std::string uri = uri_query.first;
+	connection.request.query = uri_query.second;
+	connection.request.file_name = stripFilename(uri).first;
 
-	LOG_DBG << "filename: " << connection.request.file_name;
-
-//	connection.cgi_script_path = connection.request.file_name;
-	LOG_DBG << "conn.request.query: " << connection.request.query;
+	LOG_DBG << "request: target=" << connection.request.target
+			<< " uri=" << uri
+			<< " file=" << connection.request.file_name
+			<< " query=" << connection.request.query;
 	if (uri.empty())
 		uri = "/";
 

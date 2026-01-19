@@ -23,7 +23,8 @@ std::string CgiHandler::handleRequest(const Client& connection, const std::strin
     _hasError = false;
     _errorMessage.clear();
 
-	LOG_DBG << "handleRequest " << connection.request.cgi;
+	LOG_DBG << "cgi: handleRequest method=" << connection.request.method
+			<< " script=" << scriptPath;
 
     // Create CGI process
     CgiProcess cgiProcess;

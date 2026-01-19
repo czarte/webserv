@@ -13,7 +13,9 @@ Location matchLocation(const Config &config, const std::string &target)
 		LOG_DBG << "LOG_DBG matchLocation path: " << path << " target: " << target << " compare: " << target.compare(0, path.size(), path);
         if (path.empty())
             continue;
-        if (target.size() == path.size() && target.compare(0, target.size(), path) == 0 && target.size() >= best_len)
+        bool prefix_match = (target.compare(0, path.size(), path) == 0);
+        bool boundary_ok = (target.size() == path.size() || target[path.size()] == '/');
+        if (prefix_match && boundary_ok && path.size() >= best_len)
         {
 			LOG_DBG << "LOG_DBG matchLocation: " << locations[i].getCgiBinPath();
 			return locations[i];

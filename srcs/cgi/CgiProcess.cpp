@@ -156,7 +156,7 @@ void CgiProcess::handleChildProcess(int inputPipe[2], int outputPipe[2])
 
 	// Prepare environment and arguments
 	char** env = createEnvironmentArray();
-	LOG_DBG << "env: " << env;
+	LOG_DBG << "cgi: env size=" << _environment.size();
 	if (!env)
 	{
 		const char* msg = "Failed to create environment array\n";

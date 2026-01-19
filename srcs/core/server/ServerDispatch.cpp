@@ -184,9 +184,8 @@ void serveCgi(Client &connection, std::vector<Config> configs)
 	CgiHandler handler;
 
 	// Determine interpreter based on file extension
-	LOG_DBG << "HERE";
 	std::string ext = getFileExtension(connection.request.query);
-	LOG_DBG << "HERE";
+	LOG_DBG << "cgi: ext=" << ext;
 	if (ext == ".py")
 	{
 		handler.setPythonInterpreter("/usr/bin/python3");
