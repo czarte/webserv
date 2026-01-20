@@ -214,7 +214,17 @@ void ConfigParser::parseServerDirective(const std::string& directive, const std:
         {
             throwError("server_name directive requires a value", _current_line);
         }
-        config.setServerName(tokens[1]);
+        if (tokens.size() > 1)
+            config.setServerName(tokens[1]);
+        for (size_t i = 2; i < tokens.size(); ++i)
+            config.addServerName(tokens[i]);
+    }
+    else if (directive == "cgi-bin" || directive == "cgi_bin")
+    {
+        if (tokens.size() < 2)
+            throwError("cgi-bin directive requires a value", _current_line);
+        // Currently unused by this server; accept for compatibility.
+        (void)tokens;
     }
     else if (directive == "host")
     {
@@ -309,15 +319,22 @@ void ConfigParser::parseLocationDirective(const std::string& directive, const st
         }
         location.setIndex(tokens[1]);
     }
-	else if (directive == "cgi")  // New: handle cgi on/off
-	{
-		if (tokens.size() < 2)
-		{
-			throwError("cgi directive requires a value (on/off)", _current_line);
-		}
-		LOG_DBG << "parsing conf: cgi: " << tokens[1];
-		location.setCgiEnabled(tokens[1] == "on");
-	}
+    else if (directive == "cgi")
+    {
+        if (tokens.size() < 2)
+            throwError("cgi directive requires a value", _current_line);
+        if (tokens[1] == "on" || tokens[1] == "off")
+        {
+            LOG_DBG << "parsing conf: cgi: " << tokens[1];
+            location.setCgiEnabled(tokens[1] == "on");
+        }
+        else
+        {
+            for (size_t i = 1; i < tokens.size(); ++i)
+                location.addCgiPath(tokens[i]);
+            location.setCgiEnabled(true);
+        }
+    }
     else if (directive == "autoindex")
     {
         if (tokens.size() < 2)
@@ -326,7 +343,32 @@ void ConfigParser::parseLocationDirective(const std::string& directive, const st
         }
         location.setAutoindex(stringToBool(tokens[1]));
     }
-    else if (directive == "allow_methods" || directive == "allowed_methods")
+    else if (directive == "client_max_body_size")
+    {
+        if (tokens.size() < 2)
+        {
+            throwError("client_max_body_size directive requires a value", _current_line);
+        }
+        std::string value = tokens[1];
+        int multiplier = 1;
+
+        if (!value.empty())
+        {
+            char last = value[value.length() - 1];
+            if (last == 'M' || last == 'm')
+            {
+                multiplier = 1024 * 1024;
+                value = value.substr(0, value.length() - 1);
+            }
+            else if (last == 'K' || last == 'k')
+            {
+                multiplier = 1024;
+                value = value.substr(0, value.length() - 1);
+            }
+        }
+        location.setClientMaxBodySize(stringToInt(value) * multiplier);
+    }
+    else if (directive == "allow_methods" || directive == "allowed_methods" || directive == "limit_except")
     {
         for (size_t i = 1; i < tokens.size(); i++)
         {
@@ -341,7 +383,7 @@ void ConfigParser::parseLocationDirective(const std::string& directive, const st
         }
         location.setRedirect(tokens[1]);
     }
-    else if (directive == "cgi_path" || directive == "cgi")
+    else if (directive == "cgi_path")
     {
         if (tokens.size() < 2)
         {
@@ -370,6 +412,13 @@ void ConfigParser::parseLocationDirective(const std::string& directive, const st
             throwError("upload_path directive requires a value", _current_line);
         }
         location.setUploadPath(tokens[1]);
+    }
+    else if (directive == "auth_basic")
+    {
+        if (tokens.size() < 2)
+            throwError("auth_basic directive requires a value", _current_line);
+        // Not implemented; accept for compatibility.
+        (void)tokens;
     }
     else
     {

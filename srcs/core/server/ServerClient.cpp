@@ -127,7 +127,10 @@ void Server::handleClientRead(int fd)
             if (result == Parser::PARSE_ERROR || status != 200)
             {
                 conn.keep_alive = false;
-                conn.out_buf += buildErrorResponse(status, false, "Parser::PARSE_ERROR");
+                if (err.empty())
+                    conn.out_buf += buildErrorResponse(status, false, "Parser error");
+                else
+                    conn.out_buf += buildErrorResponse(status, false, "Parser error: " + err);
                 conn.state = Client::WRITING;
                 break;
             }

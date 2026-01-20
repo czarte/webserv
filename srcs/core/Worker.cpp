@@ -15,6 +15,7 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
+#include <sys/stat.h>
 
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -24,6 +25,118 @@
 
 namespace
 {
+	std::string dirName(const std::string &path)
+	{
+		if (path.empty())
+			return "";
+		std::string::size_type end = path.size();
+		while (end > 1 && path[end - 1] == '/')
+			--end;
+		std::string::size_type slash = path.find_last_of('/', end - 1);
+		if (slash == std::string::npos)
+			return "";
+		if (slash == 0)
+			return "/";
+		return path.substr(0, slash);
+	}
+
+	std::string pickErrorBaseDir(const Config &cfg)
+	{
+		std::string root = cfg.getRoot();
+		ErrorPage ep = cfg.getErrorPage();
+		std::string desired_dir = ep.path.empty() ? "errors" : dirName(ep.path);
+
+		if (!ep.path.empty())
+		{
+			if (!ep.path.empty() && ep.path[0] == '/')
+				return desired_dir;
+			std::string root_trim = root;
+			if (!root_trim.empty() && root_trim[root_trim.size() - 1] == '/')
+				root_trim = root_trim.substr(0, root_trim.size() - 1);
+			if (!root_trim.empty()
+				&& ep.path.size() >= root_trim.size()
+				&& ep.path.compare(0, root_trim.size(), root_trim) == 0)
+				return desired_dir;
+		}
+
+		std::string candidate = joinPath(root, desired_dir);
+		if (!candidate.empty() && isDirectory(candidate))
+			return candidate;
+
+		std::string parent = dirName(root);
+		if (!parent.empty())
+		{
+			std::string parent_candidate = joinPath(parent, desired_dir);
+			if (!parent_candidate.empty() && isDirectory(parent_candidate))
+				return parent_candidate;
+		}
+
+		return candidate;
+	}
+
+	bool ensureDirExists(const std::string &path)
+	{
+		if (path.empty())
+			return false;
+		if (isDirectory(path))
+			return true;
+		if (isFile(path))
+			return false;
+		return mkdir(path.c_str(), 0755) == 0;
+	}
+
+	std::string resolveErrorPagePath(const Config &cfg)
+	{
+		ErrorPage ep = cfg.getErrorPage();
+		if (ep.path.empty())
+			return "";
+		if (ep.path[0] == '/')
+			return ep.path;
+		std::string root = cfg.getRoot();
+		std::string root_trim = root;
+		if (!root_trim.empty() && root_trim[root_trim.size() - 1] == '/')
+			root_trim = root_trim.substr(0, root_trim.size() - 1);
+		if (!root_trim.empty()
+			&& ep.path.size() >= root_trim.size()
+			&& ep.path.compare(0, root_trim.size(), root_trim) == 0)
+			return ep.path;
+		return joinPath(root, ep.path);
+	}
+
+	std::string normalizeHostHeader(const std::string &host_header)
+	{
+		std::string host = serverutil::trim(host_header);
+		std::string::size_type colon = host.find(':');
+		if (colon != std::string::npos)
+			host = host.substr(0, colon);
+		return serverutil::toLower(host);
+	}
+
+	size_t selectConfigIndex(const std::vector<Config> &configs, const Request &req)
+	{
+		if (configs.empty())
+			return 0;
+		std::map<std::string, std::string>::const_iterator it = req.headers.find("host");
+		if (it == req.headers.end())
+			return 0;
+		std::string want = normalizeHostHeader(it->second);
+		if (want.empty())
+			return 0;
+
+		for (size_t i = 0; i < configs.size(); ++i)
+		{
+			std::vector<std::string> names = configs[i].getServerNames();
+			if (names.empty() && !configs[i].getServerName().empty())
+				names.push_back(configs[i].getServerName());
+			for (size_t n = 0; n < names.size(); ++n)
+			{
+				if (serverutil::toLower(names[n]) == want)
+					return i;
+			}
+		}
+		return 0;
+	}
+
 	struct AddrInfoGuard
 	{
 		addrinfo *res;
@@ -35,21 +148,28 @@ namespace
 		AddrInfoGuard &operator=(const AddrInfoGuard &);
 	};
 
-	void respondError(Client &conn, int status, std::string message)
+	void respondError(Client &conn, int status, std::string message, ErrorPages *pages, bool head_only)
 	{
-		conn.out_buf += buildErrorResponse(status, conn.keep_alive, message);
+		conn.out_buf += buildErrorResponse(status, conn.keep_alive, message, pages, !head_only);
 		conn.state = Client::WRITING;
 		serverutil::resetRequest(conn);
 	}
 
-	void respondText(Client &conn, int status, const char *body)
+	std::string formatParseError(const std::string &err)
 	{
-		conn.out_buf += buildResponse(status, body, conn.keep_alive, "text/plain");
+		if (err.empty())
+			return "Parser error";
+		return "Parser error: " + err;
+	}
+
+	void respondText(Client &conn, int status, const char *body, bool head_only)
+	{
+		conn.out_buf += buildResponse(status, body, conn.keep_alive, "text/plain", !head_only);
 		conn.state = Client::WRITING;
 		serverutil::resetRequest(conn);
 	}
 
-	bool handleUpload(Client &conn, const Location *loc, const std::string &uri)
+	bool handleUpload(Client &conn, const Location *loc, const std::string &uri, ErrorPages *pages, bool head_only)
 	{
 		if (conn.request.method_enum != METHOD_POST && conn.request.method_enum != METHOD_PUT)
 			return false;
@@ -58,13 +178,10 @@ namespace
 		if (loc)
 			upload_root = loc->getUploadPath();
 		if (upload_root.empty())
-		{
-			respondError(conn, 403, "upload_root.empty()");
-			return true;
-		}
+			return false;
 		if (!isDirectory(upload_root))
 		{
-			respondError(conn, 500, "!isDirectory(upload_root)");
+			respondError(conn, 500, "!isDirectory(upload_root)", pages, head_only);
 			return true;
 		}
 		std::string name = serverutil::lastPathSegment(uri);
@@ -73,20 +190,20 @@ namespace
 		std::string out_path = joinPath(upload_root, name);
 		if (!serverutil::isPathWithinRoot(upload_root, out_path))
 		{
-			respondError(conn, 403, "!serverutil::isPathWithinRoot(upload_root, out_path)");
+			respondError(conn, 403, "!serverutil::isPathWithinRoot(upload_root, out_path)", pages, head_only);
 			return true;
 		}
 		if (!writeFile(out_path, conn.request.body))
 		{
-			respondError(conn, 500, "!writeFile(out_path, conn.request.body)");
+			respondError(conn, 500, "!writeFile(out_path, conn.request.body)", pages, head_only);
 			return true;
 		}
-		respondText(conn, 201, "Created\n");
+		respondText(conn, 201, "Created\n", head_only);
 		return true;
 	}
 
 	bool handleDelete(Client &conn, const Location *loc, const std::string &root,
-					  const std::string &path, const std::string &uri)
+					  const std::string &path, const std::string &uri, ErrorPages *pages, bool head_only)
 	{
 		if (conn.request.method_enum != METHOD_DELETE)
 			return false;
@@ -100,12 +217,12 @@ namespace
 		}
 		if (delete_root.empty())
 		{
-			respondError(conn, 403, "delete_root.empty()");
+			respondError(conn, 403, "delete_root.empty()", pages, head_only);
 			return true;
 		}
 		if (use_upload_root && !isDirectory(delete_root))
 		{
-			respondError(conn, 500, "use_upload_root && !isDirectory(delete_root)");
+			respondError(conn, 500, "use_upload_root && !isDirectory(delete_root)", pages, head_only);
 			return true;
 		}
 
@@ -115,7 +232,7 @@ namespace
 			std::string name = serverutil::lastPathSegment(uri);
 			if (name.empty())
 			{
-				respondError(conn, 403, "name.empty()");
+				respondError(conn, 403, "name.empty()", pages, head_only);
 				return true;
 			}
 			delete_path = joinPath(delete_root, name);
@@ -126,31 +243,31 @@ namespace
 		}
 		if (!serverutil::isPathWithinRoot(delete_root, delete_path))
 		{
-			respondError(conn, 403, "!serverutil::isPathWithinRoot(delete_root, delete_path)");
+			respondError(conn, 403, "!serverutil::isPathWithinRoot(delete_root, delete_path)", pages, head_only);
 			return true;
 		}
 
 		if (isDirectory(delete_path))
 		{
-			respondError(conn, 403, "isDirectory(delete_path)");
+			respondError(conn, 403, "isDirectory(delete_path)", pages, head_only);
 			return true;
 		}
 		if (!isFile(delete_path))
 		{
-			respondError(conn, 404, "!isFile(delete_path)");
+			respondError(conn, 404, "!isFile(delete_path)", pages, head_only);
 			return true;
 		}
 		if (!deleteFile(delete_path))
 		{
-			respondError(conn, 500, "!deleteFile(delete_path)");
+			respondError(conn, 500, "!deleteFile(delete_path)", pages, head_only);
 			return true;
 		}
-		respondText(conn, 200, "OK\n");
+		respondText(conn, 200, "OK\n", head_only);
 		return true;
 	}
 
-	void serveStatic(Client &conn, const std::string &path, const std::string &uri,
-					 const std::string &index, bool autoindex)
+	void serveStatic(Client &conn, const Request &req, const std::string &path, const std::string &uri,
+					 const std::string &index, bool autoindex, ErrorPages *pages, bool head_only)
 	{
 		std::string body;
 		std::string content_type = "text/plain";
@@ -179,7 +296,7 @@ namespace
 			}
 
 			if (body.empty() && !autoindex)
-				resp_status = 403;
+				resp_status = 404;
 		}
 		else if (isFile(path))
 		{
@@ -191,18 +308,87 @@ namespace
 		else
 		{
 			resp_status = 404;
+
+			std::string::size_type dot = path.find_last_of('.');
+			if (dot == std::string::npos)
+			{
+				std::string base_html = path + ".html";
+				std::string lang;
+				std::string cand;
+				std::map<std::string, std::string>::const_iterator it_lang = req.headers.find("accept-language");
+				if (it_lang != req.headers.end())
+				{
+					std::string v = serverutil::toLower(it_lang->second);
+					if (v.find("fr") != std::string::npos)
+					{
+						lang = "fr";
+						cand = base_html + ".fr";
+					}
+					else if (v.find("en") != std::string::npos)
+					{
+						lang = "en";
+						cand = path + ".en.html";
+					}
+				}
+
+				std::map<std::string, std::string>::const_iterator it_cs = req.headers.find("accept-charset");
+				bool wants_utf8 = false;
+				if (it_cs != req.headers.end())
+				{
+					std::string v = serverutil::toLower(it_cs->second);
+					if (v.find("utf-8") != std::string::npos)
+						wants_utf8 = true;
+				}
+
+				std::string chosen = cand;
+				std::string lang_header = lang;
+				std::string chosen_type = "text/html";
+				if (chosen.empty() && wants_utf8)
+				{
+					std::string utf8_cand = path + ".en.html.utf-8";
+					if (isFile(utf8_cand))
+					{
+						chosen = utf8_cand;
+						chosen_type = "text/html; charset=utf-8";
+					}
+				}
+				if (chosen.empty() && isFile(base_html))
+				{
+					chosen = base_html;
+					chosen_type = "text/html";
+				}
+				if (!chosen.empty() && isFile(chosen))
+				{
+					body = readFile(chosen, ok);
+					if (ok)
+					{
+						content_type = chosen_type;
+						resp_status = 200;
+						std::map<std::string, std::string> extra;
+						if (!lang_header.empty())
+							extra["Content-Language"] = lang_header;
+						if (resp_status != 200)
+							respondError(conn, resp_status, "resp_status != 200", pages, head_only);
+						else
+							conn.out_buf += buildResponse(200, body, conn.keep_alive, content_type, !head_only, extra);
+						conn.state = Client::WRITING;
+						serverutil::resetRequest(conn);
+						return;
+					}
+				}
+			}
 		}
 
 		if (resp_status != 200)
-			respondError(conn, resp_status, "resp_status != 200");
+			respondError(conn, resp_status, "resp_status != 200", pages, head_only);
 		else
-			conn.out_buf += buildResponse(200, body, conn.keep_alive, content_type);
+			conn.out_buf += buildResponse(200, body, conn.keep_alive, content_type, !head_only);
 
 		conn.state = Client::WRITING;
 		serverutil::resetRequest(conn);
 	}
 
-	void serveCgi(Client &connection, const Config &cfg)
+	void serveCgi(Client &connection, const Config &cfg, ErrorPages *pages, bool head_only)
 	{
 		CgiHandler handler;
 
@@ -241,7 +427,7 @@ namespace
 
 		if (handler.hasError())
 		{
-			respondError(connection, 500, "handler.hasError()");
+			respondError(connection, 500, "handler.hasError()", pages, head_only);
 			return;
 		}
 
@@ -270,16 +456,79 @@ namespace
 		}
 
 		// Build response
-		connection.out_buf += buildCgiResponse(headers, body, connection.keep_alive);
+		connection.out_buf += buildCgiResponse(headers, body, connection.keep_alive, !head_only);
 		connection.state = Client::WRITING;
 		serverutil::resetRequest(connection);
 		connection.resetCgiInfo();
 	}
+
+	bool handleWriteToRoot(Client &conn, const std::string &root, const std::string &uri,
+						   ErrorPages *pages, bool head_only)
+	{
+		if (conn.request.method_enum != METHOD_PUT && conn.request.method_enum != METHOD_POST)
+			return false;
+
+		if (root.empty())
+		{
+			respondError(conn, 403, "root.empty()", pages, head_only);
+			return true;
+		}
+
+		std::string out_path = joinPath(root, uri);
+		std::string::size_type slash = out_path.find_last_of('/');
+		if (slash != std::string::npos)
+		{
+			std::string parent = out_path.substr(0, slash);
+			if (!ensureDirExists(parent))
+			{
+				respondError(conn, 403, "cannot create parent directory", pages, head_only);
+				return true;
+			}
+		}
+		if (!serverutil::isPathWithinRoot(root, out_path))
+		{
+			respondError(conn, 403, "!serverutil::isPathWithinRoot(root, out_path)", pages, head_only);
+			return true;
+		}
+		if (isDirectory(out_path))
+		{
+			respondError(conn, 403, "isDirectory(out_path)", pages, head_only);
+			return true;
+		}
+
+		bool existed = isFile(out_path);
+		if (!writeFile(out_path, conn.request.body))
+		{
+			respondError(conn, 500, "!writeFile(out_path, conn.request.body)", pages, head_only);
+			return true;
+		}
+
+		int status = existed ? 204 : 201;
+		respondText(conn, status, existed ? "No Content\n" : "Created\n", head_only);
+		return true;
+	}
 }
 
 // Constructor
-Worker::Worker(const Config &config) : _listening_fd(-1), _config(config)
+Worker::Worker(const std::vector<Config> &configs)
+	: _listening_fd(-1),
+	  _configs(configs),
+	  _error_pages()
 {
+	if (_configs.empty())
+		throw std::runtime_error("Worker created with no configs");
+	_error_pages.resize(_configs.size());
+	for (size_t i = 0; i < _configs.size(); ++i)
+	{
+		_error_pages[i].setBaseDir(pickErrorBaseDir(_configs[i]));
+		ErrorPage ep = _configs[i].getErrorPage();
+		if (ep.code > 0)
+		{
+			std::string resolved = resolveErrorPagePath(_configs[i]);
+			if (!resolved.empty())
+				_error_pages[i].setOverride(ep.code, resolved);
+		}
+	}
 	initListeningSocket();
 }
 
@@ -305,35 +554,105 @@ void Worker::initListeningSocket()
 
 	AddrInfoGuard info;
 	std::stringstream port;
-	port << _config.getPort();
-	if (getaddrinfo(_config.getHost().c_str(), port.str().c_str(), &hints, &info.res) != 0)
+	const Config &cfg = _configs[0];
+	port << cfg.getPort();
+	std::string host_cfg = cfg.getHost();
+	const char *host = host_cfg.empty() ? 0 : host_cfg.c_str();
+	if (getaddrinfo(host, port.str().c_str(), &hints, &info.res) != 0)
 		throw std::runtime_error("getaddrinfo failed");
 
-	for (struct addrinfo *p = info.res; p != 0; p = p->ai_next)
+	bool tried_any = false;
+	for (int pass = 0; pass < 2; ++pass)
 	{
-		Fd sock(socket(p->ai_family, p->ai_socktype, p->ai_protocol));
-		if (sock.get() < 0)
-			continue;
-
-		int opt = 1;
-		if (setsockopt(sock.get(), SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
-			continue;
-
-		int client_fd = sock.get();
-		if (makeNonBlocking(client_fd) == -1)
+		for (struct addrinfo *p = info.res; p != 0; p = p->ai_next)
 		{
-			close(client_fd);
-			continue;
+			if (pass == 0 && p->ai_family != AF_INET)
+				continue;
+			if (pass == 1 && p->ai_family == AF_INET)
+				continue;
+
+			Fd sock(socket(p->ai_family, p->ai_socktype, p->ai_protocol));
+			if (sock.get() < 0)
+			{
+				LOG_ERR << "socket() failed: " << std::strerror(errno);
+				continue;
+			}
+
+			int opt = 1;
+			if (setsockopt(sock.get(), SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+			{
+				LOG_ERR << "setsockopt(SO_REUSEADDR) failed: " << std::strerror(errno);
+				continue;
+			}
+
+			int client_fd = sock.get();
+			if (makeNonBlocking(client_fd) == -1)
+			{
+				LOG_ERR << "makeNonBlocking failed: " << std::strerror(errno);
+				close(client_fd);
+				continue;
+			}
+
+			if (bind(sock.get(), p->ai_addr, p->ai_addrlen) < 0)
+			{
+				LOG_ERR << "bind() failed on port " << cfg.getPort() << ": " << std::strerror(errno);
+				continue;
+			}
+
+			if (listen(sock.get(), 128) < 0)
+			{
+				LOG_ERR << "listen() failed: " << std::strerror(errno);
+				continue;
+			}
+
+			_listening_fd = sock.release();
+			return; // Successfully created listening socket
 		}
+	}
 
-		if (bind(sock.get(), p->ai_addr, p->ai_addrlen) < 0)
-			continue;
+	if (!host_cfg.empty() && !tried_any)
+	{
+		tried_any = true;
+		freeaddrinfo(info.res);
+		info.res = 0;
+		if (getaddrinfo(0, port.str().c_str(), &hints, &info.res) == 0)
+		{
+			for (int pass = 0; pass < 2; ++pass)
+			{
+				for (struct addrinfo *p = info.res; p != 0; p = p->ai_next)
+				{
+					if (pass == 0 && p->ai_family != AF_INET)
+						continue;
+					if (pass == 1 && p->ai_family == AF_INET)
+						continue;
 
-		if (listen(sock.get(), 128) < 0)
-			continue;
+					Fd sock(socket(p->ai_family, p->ai_socktype, p->ai_protocol));
+					if (sock.get() < 0)
+						continue;
 
-		_listening_fd = sock.release();
-		return; // Successfully created listening socket
+					int opt = 1;
+					if (setsockopt(sock.get(), SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+						continue;
+
+					int client_fd = sock.get();
+					if (makeNonBlocking(client_fd) == -1)
+					{
+						close(client_fd);
+						continue;
+					}
+
+					if (bind(sock.get(), p->ai_addr, p->ai_addrlen) < 0)
+						continue;
+
+					if (listen(sock.get(), 128) < 0)
+						continue;
+
+					LOG_WRN << "bind() failed for host " << host_cfg << "; using 0.0.0.0 instead";
+					_listening_fd = sock.release();
+					return;
+				}
+			}
+		}
 	}
 
 	throw std::runtime_error("No listening sockets available");
@@ -459,17 +778,31 @@ void Worker::handleClientRead(int fd)
 			if (result == Parser::PARSE_ERROR || status != 200)
 			{
 				conn.keep_alive = false;
-				conn.out_buf += buildErrorResponse(status, false, "Parser::PARSE_ERROR");
+				size_t idx = conn.config_index;
+				if (idx >= _error_pages.size())
+					idx = 0;
+				conn.out_buf += buildErrorResponse(status, false, formatParseError(err), &_error_pages[idx]);
 				conn.state = Client::WRITING;
 				break;
 			}
 
+			conn.config_index = selectConfigIndex(_configs, conn.request);
+			const Config &cfg = _configs[conn.config_index];
+
+			size_t max_body = 0;
+			if (cfg.getClientMaxBodySize() > 0)
+				max_body = static_cast<size_t>(cfg.getClientMaxBodySize());
+			std::pair<std::string, std::string> uri_query = stripQuery(conn.request.target);
+			Location loc = matchLocation(cfg, uri_query.first);
+			if (loc.getClientMaxBodySize() > 0)
+				max_body = static_cast<size_t>(loc.getClientMaxBodySize());
+
 			if (conn.request.has_body
-				&& _config.getClientMaxBodySize() > 0
-				&& conn.request.content_length > static_cast<size_t>(_config.getClientMaxBodySize()))
+				&& max_body > 0
+				&& conn.request.content_length > max_body)
 			{
 				conn.keep_alive = false;
-				conn.out_buf += buildErrorResponse(413, false, "MAX BODY SIZE exceeded");
+				conn.out_buf += buildErrorResponse(413, false, "MAX BODY SIZE exceeded", &_error_pages[conn.config_index]);
 				conn.state = Client::WRITING;
 				serverutil::resetRequest(conn);
 				break;
@@ -543,25 +876,28 @@ void Worker::handleReadyRequest(Client &connection)
 	if (uri.empty())
 		uri = "/";
 
+	const Config &cfg = _configs[connection.config_index];
 	LOG_DBG << "handleReadyRequest uri: " << uri;
-	Location loc = matchLocation(_config, uri);
+	Location loc = matchLocation(cfg, uri);
 	LOG_DBG << "handleReadyRequest matchLocation result: " << loc.getCgiBinPath();
-	_config.logDebug();
+	cfg.logDebug();
 
 	if (!serverutil::isMethodAllowed(loc.getAllowedMethods(), connection.request.method))
 	{
-		respondError(connection, 405, "loc && !serverutil::isMethodAllowed(loc->getAllowedMethods(), conn.request.method)");
+		respondError(connection, 405, "loc && !serverutil::isMethodAllowed(loc->getAllowedMethods(), conn.request.method)",
+					&_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD);
 		return;
 	}
 
 	if (hasTraversal(uri))
 	{
-		respondError(connection, 403, "hasTraversal(uri)");
+		respondError(connection, 403, "hasTraversal(uri)", &_error_pages[connection.config_index],
+					connection.request.method_enum == METHOD_HEAD);
 		return;
 	}
 
-	std::string root = _config.getRoot();
-	std::string index = _config.getIndex();
+	std::string root = cfg.getRoot();
+	std::string index = cfg.getIndex();
 	bool autoindex = false;
 	std::string alias;
 
@@ -569,6 +905,8 @@ void Worker::handleReadyRequest(Client &connection)
 		root = loc.getRoot();
 	if (!loc.getIndex().empty())
 		index = loc.getIndex();
+	else if (!loc.getRoot().empty() && loc.getPath() != "/")
+		index.clear();
 	if (!loc.getAlias().empty())
 		alias = loc.getAlias();
 	autoindex = loc.getAutoindex();
@@ -580,6 +918,11 @@ void Worker::handleReadyRequest(Client &connection)
 		std::string remainder = uri.substr(loc.getPath().size());
 		path = joinPath(alias, remainder);
 		LOG_DBG << "!alias.empty() " << path;
+	}
+	else if (!loc.getRoot().empty() && loc.getPath() != "/")
+	{
+		std::string remainder = uri.substr(loc.getPath().size());
+		path = joinPath(root, remainder);
 	}
 	else
 	{
@@ -632,11 +975,16 @@ void Worker::handleReadyRequest(Client &connection)
 		}
 	}
 
-	if (handleUpload(connection, &loc, uri))
+	if (handleUpload(connection, &loc, uri, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD))
 	{
 		return;
 	}
-	if (handleDelete(connection, &loc, root, path, uri))
+	if (handleWriteToRoot(connection, root, uri, &_error_pages[connection.config_index],
+						  connection.request.method_enum == METHOD_HEAD))
+	{
+		return;
+	}
+	if (handleDelete(connection, &loc, root, path, uri, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD))
 	{
 		return;
 	}
@@ -649,9 +997,10 @@ void Worker::handleReadyRequest(Client &connection)
 	LOG_DBG << "request: " << connection.request.target << " " << connection.request.file_name << " " << connection.request.query << " " << index << " " << autoindex;
 
 	if (!connection.cgi_request)
-		serveStatic(connection, path, uri, index, autoindex);
+		serveStatic(connection, connection.request, path, uri, index, autoindex, &_error_pages[connection.config_index],
+					connection.request.method_enum == METHOD_HEAD);
 	else
-		serveCgi(connection, _config);
+		serveCgi(connection, cfg, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD);
 }
 
 // Add this worker's fds to poll array

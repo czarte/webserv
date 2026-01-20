@@ -5,7 +5,7 @@ Location matchLocation(const Config &config, const std::string &target)
 {
 	config.logDebug();
     std::vector<Location> locations = config.getLocations();
-    const Location best;
+    Location best;
     size_t best_len = 0;
     for (size_t i = 0; i < locations.size(); ++i)
     {
@@ -14,11 +14,17 @@ Location matchLocation(const Config &config, const std::string &target)
         if (path.empty())
             continue;
         bool prefix_match = (target.compare(0, path.size(), path) == 0);
-        bool boundary_ok = (target.size() == path.size() || target[path.size()] == '/');
+        bool boundary_ok = false;
+        if (path == "/")
+            boundary_ok = true;
+        else if (!path.empty() && path[path.size() - 1] == '/')
+            boundary_ok = true;
+        else
+            boundary_ok = (target.size() == path.size() || target[path.size()] == '/');
         if (prefix_match && boundary_ok && path.size() >= best_len)
         {
-			LOG_DBG << "LOG_DBG matchLocation: " << locations[i].getCgiBinPath();
-			return locations[i];
+			best = locations[i];
+			best_len = path.size();
         }
     }
 	return best;

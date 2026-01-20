@@ -34,7 +34,10 @@ namespace serverutil
         std::string want = toLower(method);
         for (size_t i = 0; i < allowed.size(); ++i)
         {
-            if (toLower(allowed[i]) == want)
+            std::string allow = toLower(allowed[i]);
+            if (allow == want)
+                return true;
+            if (want == "head" && allow == "get")
                 return true;
         }
         return false;

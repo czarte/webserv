@@ -1,4 +1,5 @@
 #include "http/ResponseBuilder.hpp"
+#include "http/ErrorPages.hpp"
 #include "core/ServerInternal.hpp"
 #include "utils/Logger.hpp"
 
@@ -26,9 +27,58 @@ const char *statusMessage(int status)
     case 404: return "Not Found";
     case 405: return "Method Not Allowed";
     case 413: return "Payload Too Large";
-    case 500: return "Internal Server Error statusMessage";
+    case 500: return "Internal Server Error";
     default:  return "Error";
     }
+}
+
+std::string replaceAll(std::string s, const std::string &from, const std::string &to)
+{
+    if (from.empty())
+        return s;
+    std::string::size_type pos = 0;
+    while ((pos = s.find(from, pos)) != std::string::npos)
+    {
+        s.replace(pos, from.size(), to);
+        pos += to.size();
+    }
+    return s;
+}
+
+std::string htmlEscape(const std::string &in)
+{
+    std::string out;
+    out.reserve(in.size());
+    for (size_t i = 0; i < in.size(); ++i)
+    {
+        char c = in[i];
+        if (c == '&')
+            out += "&amp;";
+        else if (c == '<')
+            out += "&lt;";
+        else if (c == '>')
+            out += "&gt;";
+        else if (c == '"')
+            out += "&quot;";
+        else if (c == '\'')
+            out += "&#39;";
+        else
+            out += c;
+    }
+    return out;
+}
+
+std::string buildDefaultErrorHtml(int status, const std::string &msg)
+{
+    std::ostringstream b;
+    b << "<!doctype html><html><head><meta charset=\"utf-8\">"
+      << "<title>" << status << " " << statusMessage(status) << "</title>"
+      << "</head><body>"
+      << "<h1>" << status << " " << statusMessage(status) << "</h1>";
+    if (!msg.empty())
+        b << "<pre>" << htmlEscape(msg) << "</pre>";
+    b << "</body></html>";
+    return b.str();
 }
 }
 
@@ -58,27 +108,78 @@ std::string contentTypeForPath(const std::string &path)
 std::string buildResponse(int status, const std::string &body, bool keep_alive,
                           const std::string &content_type)
 {
+    return buildResponse(status, body, keep_alive, content_type, true);
+}
+
+std::string buildResponse(int status, const std::string &body, bool keep_alive,
+                          const std::string &content_type, bool include_body)
+{
+    std::map<std::string, std::string> empty;
+    return buildResponse(status, body, keep_alive, content_type, include_body, empty);
+}
+
+std::string buildResponse(int status, const std::string &body, bool keep_alive,
+                          const std::string &content_type, bool include_body,
+                          const std::map<std::string, std::string> &extra_headers)
+{
     std::ostringstream out;
     out << "HTTP/1.1 " << status << " " << statusMessage(status) << "\r\n";
     out << "Content-Length: " << body.size() << "\r\n";
     out << "Content-Type: " << content_type << "\r\n";
+    for (std::map<std::string, std::string>::const_iterator it = extra_headers.begin();
+         it != extra_headers.end(); ++it)
+    {
+        out << it->first << ": " << it->second << "\r\n";
+    }
     out << "Connection: " << (keep_alive ? "keep-alive" : "close") << "\r\n";
     out << "\r\n";
-    out << body;
+    if (include_body)
+        out << body;
     return out.str();
 }
 
 std::string buildErrorResponse(int status, bool keep_alive, std::string message)
 {
-    std::string body = statusMessage(status);
-    body += "\n";
-	body += message;
-	body += "\n";
-    return buildResponse(status, body, keep_alive, "text/plain");
+    return buildErrorResponse(status, keep_alive, message, 0, true);
+}
+
+std::string buildErrorResponse(int status, bool keep_alive, std::string message,
+                               const ErrorPages *pages)
+{
+    return buildErrorResponse(status, keep_alive, message, pages, true);
+}
+
+std::string buildErrorResponse(int status, bool keep_alive, std::string message,
+                               const ErrorPages *pages, bool include_body)
+{
+    std::string html;
+    if (pages)
+    {
+        html = pages->getPage(status);
+        if (!html.empty())
+        {
+            std::ostringstream ss;
+            ss << status;
+            html = replaceAll(html, "{{STATUS}}", ss.str());
+            html = replaceAll(html, "{{REASON}}", statusMessage(status));
+            html = replaceAll(html, "{{MESSAGE}}", htmlEscape(message));
+        }
+    }
+
+    if (html.empty())
+        html = buildDefaultErrorHtml(status, message);
+
+    return buildResponse(status, html, keep_alive, "text/html", include_body);
 }
 
 std::string buildCgiResponse(const std::string &cgi_headers, const std::string &body,
 							 bool keep_alive)
+{
+	return buildCgiResponse(cgi_headers, body, keep_alive, true);
+}
+
+std::string buildCgiResponse(const std::string &cgi_headers, const std::string &body,
+							 bool keep_alive, bool include_body)
 {
 	std::ostringstream response;
 
@@ -137,7 +238,8 @@ std::string buildCgiResponse(const std::string &cgi_headers, const std::string &
 	response << "\r\n";
 
 	// Add body
-	response << body;
+	if (include_body)
+		response << body;
 
 	return response.str();
 }
@@ -145,6 +247,8 @@ std::string buildCgiResponse(const std::string &cgi_headers, const std::string &
 std::string getFileExtension(const std::string &path)
 {
 	size_t dot_pos = path.find_last_of('.');
+	if (dot_pos == std::string::npos)
+		return "";
 	std::string fromdot = path.substr(dot_pos);
 	size_t and_pos = fromdot.find_first_of('&');
 	if (and_pos == std::string::npos)

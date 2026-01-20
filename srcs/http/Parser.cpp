@@ -1,10 +1,7 @@
 #include "http/Parser.hpp"
+#include "http/header_rules.hpp"
 
 #include <cctype>
-#include <sstream>
-#include <cstdlib>
-#include <cerrno>
-#include <limits>
 
 namespace
 {
@@ -33,6 +30,8 @@ namespace
     {
         if (m == "GET")
             return METHOD_GET;
+        if (m == "HEAD")
+            return METHOD_HEAD;
         if (m == "POST")
             return METHOD_POST;
         if (m == "PUT")
@@ -127,6 +126,7 @@ Parser::Result Parser::parseOne(std::string &in_buf, Request &req, int &status, 
         return PARSE_ERROR;
     }
 
+    HeaderList fields;
     std::string::size_type pos = line_end + 2;
     while (pos < block.size())
     {
@@ -157,26 +157,25 @@ Parser::Result Parser::parseOne(std::string &in_buf, Request &req, int &status, 
             return PARSE_ERROR;
         }
 
-        req.headers[key] = val;
+        fields.push_back(HeaderField(key, val));
     }
-     // validate headers fields : check all bad cases in the header fields
-    std::map<std::string, std::string>::iterator it = req.headers.find("content-length");
-    if (it != req.headers.end())
+
+    NormalizedHeaders norm;
+    bool http11 = (req.version == "HTTP/1.1");
+    int st = apply_header_rules(fields, norm, http11, err, false);
+    if (st != 0)
     {
-        const std::string &val = it->second;
-        errno = 0;
-        char *end = 0;
-        unsigned long long len = std::strtoull(val.c_str(), &end, 10);
-        while (end && *end && std::isspace(static_cast<unsigned char>(*end)))
-            ++end;
-        if (errno != 0 || !end || *end != '\0' || len > std::numeric_limits<size_t>::max())
-        {
-            err = "invalid content-length";
-            status = 400;
-            return PARSE_ERROR;
-        }
-        req.content_length = static_cast<size_t>(len);
-        req.has_body = (req.content_length > 0);
+        status = st;
+        return PARSE_ERROR;
+    }
+
+    req.headers = norm.single;
+    req.content_length = norm.content_length;
+    req.has_body = norm.has_content_length && norm.content_length > 0;
+    if (req.method_enum == METHOD_HEAD)
+    {
+        req.has_body = false;
+        req.content_length = 0;
     }
 
     return PARSED_OK;

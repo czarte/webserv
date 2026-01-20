@@ -27,6 +27,7 @@ public:
     // Getters
     int getPort() const;
     std::string getServerName() const;
+    std::vector<std::string> getServerNames() const;
     std::string getHost() const;
     std::string getRoot() const;
     int getClientMaxBodySize() const;
@@ -38,6 +39,7 @@ public:
     // Setters
     void setPort(int port);
     void setServerName(const std::string& server_name);
+    void addServerName(const std::string& server_name);
     void setHost(const std::string& host);
     void setRoot(const std::string& root);
     void setClientMaxBodySize(int size);
@@ -49,6 +51,7 @@ public:
 private:
     int _port;
     std::string _server_name;
+    std::vector<std::string> _server_names;
     std::string _host;
     std::string _root;
     int _client_max_body_size;

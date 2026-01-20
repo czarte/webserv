@@ -8,6 +8,8 @@ CORE_SRCS := \
 	srcs/core/Worker.cpp
 
 HTTP_SRCS := \
+	srcs/http/ErrorPages.cpp \
+	srcs/http/header_rules.cpp \
 	srcs/http/Parser.cpp \
 	srcs/http/Request.cpp \
 	srcs/http/Response.cpp \

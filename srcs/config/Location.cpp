@@ -11,7 +11,8 @@ Location::Location()
 		_cgi_path(),
 		_cgi_ext(),
 		_upload_path(),
-		_cgi_enabled(false)
+		_cgi_enabled(false),
+		_client_max_body_size(-1)
 {
 }
 
@@ -26,7 +27,8 @@ Location::Location(const std::string& path)
       _cgi_path(),
       _cgi_ext(),
       _upload_path(),
-	  _cgi_enabled(false)
+	  _cgi_enabled(false),
+	  _client_max_body_size(-1)
 {
 }
 
@@ -88,6 +90,11 @@ std::string Location::getUploadPath() const
 bool Location::isCgiEnabled() const
 {
 	return _cgi_enabled;
+}
+
+int Location::getClientMaxBodySize() const
+{
+	return _client_max_body_size;
 }
 
 std::string Location::getCgiBinPath() const
@@ -157,4 +164,9 @@ void Location::setUploadPath(const std::string& upload_path)
 void Location::setCgiEnabled(bool enabled)
 {
 	_cgi_enabled = enabled;
+}
+
+void Location::setClientMaxBodySize(int size)
+{
+	_client_max_body_size = size;
 }

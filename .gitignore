@@ -3,3 +3,10 @@ webserver
 .idea
 build
 webserv
+webserv*
+webserv_tester
+webserv_tester/*
+.vscode
+*.log
+test/*
+test

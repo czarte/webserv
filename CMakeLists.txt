@@ -41,6 +41,8 @@ set(CORE_SRCS
 
 # HTTP sources
 set(HTTP_SRCS
+        srcs/http/ErrorPages.cpp
+        srcs/http/header_rules.cpp
         srcs/http/Parser.cpp
         srcs/http/Request.cpp
         srcs/http/Response.cpp

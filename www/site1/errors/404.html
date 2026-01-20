@@ -1,1 +1,59 @@
-<html><body><h1>404 Not1 Found</h1></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>404 Not Found</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <main class="card" role="main" aria-labelledby="title">
+      <header class="top">
+        <div class="badge">404</div>
+        <div>
+          <h1 id="title">Not Found</h1>
+          <div class="sub">The requested resource could not be found.</div>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="panel">
+          <h2>What happened</h2>
+          <div class="kv">
+            <div class="k">Status</div><div class="v"><span class="code">404</span> — Not Found</div>
+            <div class="k">Request</div><div class="v">The server could not complete your request.</div>
+            <div class="k">Next step</div><div class="v">Check the URL, method, and headers, then try again.</div>
+          </div>
+
+          <div class="actions">
+            <a class="btn" href="/" aria-label="Go to home">
+              <span aria-hidden="true">🏠</span> Home
+            </a>
+            <a class="btn secondary" href="javascript:location.reload()" aria-label="Reload page">
+              <span aria-hidden="true">↻</span> Reload
+            </a>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Details</h2>
+          <pre class="code">{{MESSAGE}}</pre>
+          <div class="sub small" style="margin-top:10px;">
+            If you control this server, check the logs for a more precise error.
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="small">
+          <span class="code">webserv</span><span class="sep">•</span>Error page
+        </div>
+        <div class="small code">
+          {{STATUS}} {{REASON}}
+        </div>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

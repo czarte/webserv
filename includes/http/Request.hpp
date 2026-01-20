@@ -8,6 +8,7 @@
 enum HttpMethod
 {
     METHOD_GET,
+    METHOD_HEAD,
     METHOD_POST,
     METHOD_PUT,
     METHOD_DELETE,

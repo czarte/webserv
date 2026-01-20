@@ -1,6 +1,8 @@
 #include "config/Config.hpp"
 #include "utils/Logger.hpp"
 
+#include <sstream>
+
 ErrorPage::ErrorPage() : code(0), path()
 {
 }
@@ -8,6 +10,7 @@ ErrorPage::ErrorPage() : code(0), path()
 Config::Config()
     : _port(0),
       _server_name(),
+      _server_names(),
       _host(),
       _root(),
       _client_max_body_size(0),
@@ -21,6 +24,7 @@ Config::Config(int port, const std::string& server_name, const std::string& host
                const std::string& root, int client_max_body_size, const std::string& index)
     : _port(port),
       _server_name(server_name),
+      _server_names(),
       _host(host),
       _root(root),
       _client_max_body_size(client_max_body_size),
@@ -28,6 +32,8 @@ Config::Config(int port, const std::string& server_name, const std::string& host
       _error_page(),
       _locations()
 {
+    if (!server_name.empty())
+        _server_names.push_back(server_name);
 }
 
 Config::~Config()
@@ -43,6 +49,11 @@ int Config::getPort() const
 std::string Config::getServerName() const
 {
     return _server_name;
+}
+
+std::vector<std::string> Config::getServerNames() const
+{
+    return _server_names;
 }
 
 std::string Config::getHost() const
@@ -89,6 +100,23 @@ void Config::setPort(int port)
 void Config::setServerName(const std::string& server_name)
 {
     _server_name = server_name;
+    _server_names.clear();
+    if (!server_name.empty())
+        _server_names.push_back(server_name);
+}
+
+void Config::addServerName(const std::string& server_name)
+{
+    if (server_name.empty())
+        return;
+    if (_server_name.empty())
+        _server_name = server_name;
+    for (size_t i = 0; i < _server_names.size(); ++i)
+    {
+        if (_server_names[i] == server_name)
+            return;
+    }
+    _server_names.push_back(server_name);
 }
 
 void Config::setHost(const std::string& host)
@@ -133,6 +161,18 @@ void Config::logDebug() const
 			<< "\n error_page.code=" << _error_page.code
 			<< "\n error_page.path=" << _error_page.path
 			<< "\n locations.count=" << _locations.size();
+
+	if (!_server_names.empty())
+	{
+		std::ostringstream names;
+		for (size_t i = 0; i < _server_names.size(); ++i)
+		{
+			if (i > 0)
+				names << ", ";
+			names << _server_names[i];
+		}
+		LOG_DBG << "\n server_names=" << names.str();
+	}
 
 	for (size_t i = 0; i < _locations.size(); ++i)
 	{

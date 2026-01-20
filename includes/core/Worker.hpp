@@ -3,13 +3,14 @@
 
 #include "core/Client.hpp"
 #include "config/Config.hpp"
+#include "http/ErrorPages.hpp"
 #include <map>
 #include <vector>
 #include <poll.h>
 
 class Worker {
 public:
-	explicit Worker(const Config &config);
+	explicit Worker(const std::vector<Config> &configs);
 	~Worker();
 
 	// Socket management
@@ -44,7 +45,8 @@ private:
 
 	int _listening_fd;
 	std::map<int, Client> _clients;
-	Config _config;
+	std::vector<Config> _configs;
+	std::vector<ErrorPages> _error_pages;
 };
 
 #endif //WEBSERV_WORKER_HPP

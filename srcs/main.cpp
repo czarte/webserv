@@ -11,6 +11,7 @@
 
 
 #include "core/Server.hpp"
+#include "core/ServerInternal.hpp"
 
 #include <exception>
 #include <iostream>
@@ -18,8 +19,8 @@
 
 int main(int argc, char **argv)
 {
-    (void)argc;
-    (void)argv;
+    if (argc > 1)
+        serverutil::kDefaultConfigPath = argv[1];
     try
     {
         signal(SIGPIPE, SIG_IGN);

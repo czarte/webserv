@@ -24,6 +24,7 @@ public:
     std::string getUploadPath() const;
 	bool isCgiEnabled() const;  // New: check if CGI is enabled
 	std::string getCgiBinPath() const;  // New: get the actual CGI bin path
+	int getClientMaxBodySize() const;
     
     // Setters
     void setPath(const std::string& path);
@@ -37,6 +38,7 @@ public:
     void addCgiExt(const std::string& cgi_ext);
     void setUploadPath(const std::string& upload_path);
 	void setCgiEnabled(bool enabled);
+	void setClientMaxBodySize(int size);
 
 private:
     std::string _path;
@@ -47,9 +49,10 @@ private:
     std::vector<std::string> _allowed_methods;
     std::string _redirect;
     std::vector<std::string> _cgi_path;
-    std::vector<std::string> _cgi_ext;
+	std::vector<std::string> _cgi_ext;
     std::string _upload_path;
 	bool _cgi_enabled;
+	int _client_max_body_size;
 };
 
 #endif

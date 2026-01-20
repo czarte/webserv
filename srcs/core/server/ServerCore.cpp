@@ -6,6 +6,7 @@
 #include <cstring>
 #include <sstream>
 #include <stdexcept>
+#include <map>
 #include <utility>
 
 #include <fcntl.h>
@@ -41,10 +42,18 @@ Server::Server()
 	if (_configs.empty())
 		throw std::runtime_error("No server configurations loaded");
 
-	// Create one Worker per Config
+	std::map<std::string, std::vector<Config> > groups;
 	for (size_t i = 0; i < _configs.size(); ++i)
 	{
-		_workers.push_back(new Worker(_configs[i]));
+		std::ostringstream key;
+		key << _configs[i].getHost() << ":" << _configs[i].getPort();
+		groups[key.str()].push_back(_configs[i]);
+	}
+
+	for (std::map<std::string, std::vector<Config> >::iterator it = groups.begin();
+		 it != groups.end(); ++it)
+	{
+		_workers.push_back(new Worker(it->second));
 	}
 }
 
