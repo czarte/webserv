@@ -634,8 +634,10 @@ void Worker::handleReadyRequest(Client &connection)
 		}
 	}
 
-	if (handleUpload(connection, &loc, uri))
+	bool upload = false;
+	if (upload)
 	{
+		handleUpload(connection, &loc, uri);
 		return;
 	}
 	if (handleDelete(connection, &loc, root, path, uri))
