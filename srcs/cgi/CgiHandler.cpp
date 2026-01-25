@@ -138,6 +138,7 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
     env["QUERY_STRING"] = request.query;
     env["PATH_INFO"] = pathInfo;
     env["PATH_TRANSLATED"] = _documentRoot + pathInfo;
+	env["DOCUMENT_ROOT"] = _documentRoot;
 
     // Parse query parameters into environment
     if (!queryString.empty())

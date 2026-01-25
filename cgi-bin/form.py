@@ -297,7 +297,7 @@ def main():
         content_type = os.environ.get("CONTENT_TYPE", "")
 
         # Determine upload directory relative to script location
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_dir = os.environ.get("DOCUMENT_ROOT")
         upload_dir = os.path.join(script_dir, "uploads")
         upload_dir = os.path.normpath(upload_dir)
 
