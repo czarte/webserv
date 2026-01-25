@@ -156,6 +156,8 @@ print("Content-Type: text/html\r\n")
 
 request_method = os.environ.get("REQUEST_METHOD", "GET").upper()
 
+print("REQUEST Type: " + request_method)
+
 if request_method == "POST":
     # Read POST data from stdin
     content_length = os.environ.get("CONTENT_LENGTH", "0")

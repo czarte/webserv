@@ -2,16 +2,16 @@
 #include "utils/Logger.hpp"
 #include <iostream>
 
-std::pair<std::string, std::string> stripLocation(std::vector<Location> locations, const std::string &target)
-{
-	LOG_DBG << "stripQuery: " << target;
-	for (size_t i = 0; i < locations.size(); ++i) {
-		std::string::size_type q = target.find_first_of("/#");
-		if (q == std::string::npos)
-			return std::make_pair(target.substr(0, q), "");
-		return std::make_pair(target.substr(0, q), target.substr(q + 1));
-	}
-}
+//std::pair<std::string, std::string> stripLocation(std::vector<Location> locations, const std::string &target)
+//{
+//	LOG_DBG << "stripQuery: " << target;
+//	for (size_t i = 0; i < locations.size(); ++i) {
+//		std::string::size_type q = target.find_first_of("/#");
+//		if (q == std::string::npos)
+//			return std::make_pair(target.substr(0, q), "");
+//		return std::make_pair(target.substr(0, q), target.substr(q + 1));
+//	}
+//}
 
 std::pair<std::string, std::string> stripQuery(const std::string &target)
 {
