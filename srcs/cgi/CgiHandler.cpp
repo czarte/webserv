@@ -148,7 +148,7 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
     // Content type and length for POST requests
     if (request.method_enum == METHOD_POST)
     {
-        std::map<std::string, std::string>::const_iterator it = request.headers.find("Content-Type");
+        std::map<std::string, std::string>::const_iterator it = request.headers.find("content-type");
         if (it != request.headers.end())
             env["CONTENT_TYPE"] = it->second;
 

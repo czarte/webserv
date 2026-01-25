@@ -10,3 +10,5 @@ webserv_tester/*
 *.log
 test/*
 test
+cgi-bin/uploads/
+www/site1/uploads/
