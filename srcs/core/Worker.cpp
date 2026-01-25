@@ -979,6 +979,14 @@ void Worker::handleReadyRequest(Client &connection)
 	{
 		return;
 	}
+
+//	bool fileupload = false;
+//	if (fileupload)
+//	{
+//		handleUpload(connection, &loc, uri, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD);
+//		return;
+//	}
+
 	if (handleWriteToRoot(connection, root, uri, &_error_pages[connection.config_index],
 						  connection.request.method_enum == METHOD_HEAD))
 	{
