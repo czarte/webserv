@@ -135,7 +135,7 @@ def get_response_html(params):
         </div>
 """
 
-    html_content += """        <a href="/cgi-bin/form.py" class="back-link">&larr; Back to form</a>
+    html_content += """        <a href="/cgi?form.py" class="back-link">&larr; Back to form</a>
       </div>
     </section>
 

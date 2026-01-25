@@ -1,6 +1,7 @@
 #ifndef PATH_UTILS_HPP
 #define PATH_UTILS_HPP
 
+#include "config/Location.hpp"
 #include <string>
 
 std::pair<std::string, std::string> stripQuery(const std::string &target);
