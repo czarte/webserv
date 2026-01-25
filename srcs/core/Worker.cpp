@@ -975,25 +975,27 @@ void Worker::handleReadyRequest(Client &connection)
 		}
 	}
 
-	if (handleUpload(connection, &loc, uri, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD))
-	{
-		return;
-	}
-
-//	bool fileupload = false;
-//	if (fileupload)
+//	if (handleUpload(connection, &loc, uri, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD))
 //	{
-//		handleUpload(connection, &loc, uri, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD);
 //		return;
 //	}
 
-	if (handleWriteToRoot(connection, root, uri, &_error_pages[connection.config_index],
-						  connection.request.method_enum == METHOD_HEAD))
+	bool fileupload = false;
+	if (fileupload)
 	{
+		handleUpload(connection, &loc, uri, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD);
 		return;
 	}
-	if (handleDelete(connection, &loc, root, path, uri, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD))
+
+	if (fileupload)
 	{
+		handleWriteToRoot(connection, root, uri, &_error_pages[connection.config_index],
+						  connection.request.method_enum == METHOD_HEAD);
+		return;
+	}
+	if (fileupload)
+	{
+		handleDelete(connection, &loc, root, path, uri, &_error_pages[connection.config_index], connection.request.method_enum == METHOD_HEAD);
 		return;
 	}
 
@@ -1002,7 +1004,7 @@ void Worker::handleReadyRequest(Client &connection)
 		LOG_DBG << "llc" << llc[i];
 	}
 
-	LOG_DBG << "request: " << connection.request.target << " " << connection.request.file_name << " " << connection.request.query << " " << index << " " << autoindex;
+	LOG_DBG << "request: " << connection.request.target << " " << connection.request.file_name << " " << connection.request.query << " " << index << " method enum: " << connection.request.method_enum;
 
 	if (!connection.cgi_request)
 		serveStatic(connection, connection.request, path, uri, index, autoindex, &_error_pages[connection.config_index],

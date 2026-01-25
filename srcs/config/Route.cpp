@@ -13,7 +13,7 @@ Location matchLocation(const Config &config, const std::string &target)
 		LOG_DBG << "LOG_DBG matchLocation path: " << path << " target: " << target << " compare: " << target.compare(0, path.size(), path);
         if (path.empty())
             continue;
-        bool prefix_match = (target.compare(0, path.size(), path) == 0);
+        bool prefix_match = (target.compare(0, path.size(), path) == 0); //;
         bool boundary_ok = false;
         if (path == "/")
             boundary_ok = true;
