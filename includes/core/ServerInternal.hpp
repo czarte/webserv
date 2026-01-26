@@ -115,6 +115,9 @@ namespace serverutil
         conn.request = Request();
         conn.body_bytes_read = 0;
         conn.body_bytes_expected = 0;
+        conn.chunked = false;
+        conn.chunk_bytes_remaining = 0;
+        conn.chunk_reading_trailer = false;
     }
 
 	inline Config getConfigForConnection(const Client &conn,

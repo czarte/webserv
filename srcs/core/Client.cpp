@@ -12,12 +12,15 @@ Client::Client()
     , header_start_ms(0)
     , state(READING_HEADERS)
     , body_bytes_read(0)
-    , body_bytes_expected(0),
-	  cgi_request(false),
-	  cgi_script_path(),
-	  cgi_bin_path(),
-	  cgi_path_info(),
-	  location(NULL)
+    , body_bytes_expected(0)
+	, chunked(false)
+	, chunk_bytes_remaining(0)
+	, chunk_reading_trailer(false)
+	, cgi_request(false)
+	, cgi_script_path()
+	, cgi_bin_path()
+	, cgi_path_info()
+	, location(NULL)
 
 {
 }
@@ -34,6 +37,9 @@ Client::Client(int f)
     , state(READING_HEADERS)
     , body_bytes_read(0)
     , body_bytes_expected(0)
+	, chunked(false)
+	, chunk_bytes_remaining(0)
+	, chunk_reading_trailer(false)
 {
 }
 
@@ -49,6 +55,9 @@ void logClient(const Client& conn)
 			<< " header_start_ms=" << conn.header_start_ms
 			<< " body_bytes_read=" << conn.body_bytes_read
 			<< " body_bytes_expected=" << conn.body_bytes_expected
+			<< " chunked=" << (conn.chunked ? "true" : "false")
+			<< " chunk_bytes_remaining=" << conn.chunk_bytes_remaining
+			<< " chunk_reading_trailer=" << (conn.chunk_reading_trailer ? "true" : "false")
 			<< " cgi_request=" << (conn.cgi_request ? "true" : "false")
 			<< " cgi_script_path=" << conn.cgi_script_path
 			<< " cgi_bin_path=" << conn.cgi_bin_path

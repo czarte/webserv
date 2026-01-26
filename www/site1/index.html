@@ -1,1 +1,88 @@
-<html><body><h1>Site 1</h1></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>webserv – Home</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+
+<body>
+  <div class="wrap">
+    <main class="card" role="main">
+      <header class="top">
+        <div class="badge">WS</div>
+        <div>
+          <h1>webserv</h1>
+          <div class="sub">Server-native upload test (no CGI)</div>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="panel">
+          <h2>POST upload test</h2>
+
+          <p class="sub">
+            This form sends a raw POST request directly to the server.
+            No CGI is involved. If upload is wired correctly, a file
+            will be created under <span class="code">/uploads</span>.
+          </p>
+
+          <form method="POST" action="/uploads/test.txt">
+            <label class="sub" for="data">Request body</label>
+            <textarea
+              id="data"
+              name="data"
+              rows="6"
+              style="width:100%; margin-top:6px;"
+            >Hello from webserv POST upload</textarea>
+
+            <div class="actions" style="margin-top:12px;">
+              <button class="btn" type="submit">
+                Upload via POST
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h2>What should happen</h2>
+          <ul class="env-list">
+            <li>
+              <span class="env-key">Method</span>
+              <span class="env-sep">=</span>
+              <span class="env-val">POST</span>
+            </li>
+            <li>
+              <span class="env-key">Target</span>
+              <span class="env-sep">=</span>
+              <span class="env-val">/uploads/test.txt</span>
+            </li>
+            <li>
+              <span class="env-key">Result</span>
+              <span class="env-sep">=</span>
+              <span class="env-val">201 Created</span>
+            </li>
+            <li>
+              <span class="env-key">File</span>
+              <span class="env-sep">=</span>
+              <span class="env-val">www/uploads/test.txt</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="small">
+          <span class="code">webserv</span>
+          <span class="sep">•</span>
+          static homepage
+        </div>
+        <div class="small code">
+          POST /uploads/test.txt
+        </div>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

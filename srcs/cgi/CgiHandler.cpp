@@ -172,6 +172,14 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
         env[headerName] = it->second;
     }
 
+    std::map<std::string, std::string>::const_iterator it_auth = request.headers.find("authorization");
+    if (it_auth != request.headers.end())
+    {
+        env["AUTH_TYPE"] = "Basic";
+        env["REMOTE_USER"] = "Admin";
+        env["REMOTE_IDENT"] = "Admin";
+    }
+
     // Remote address (if available)
     env["REMOTE_ADDR"] = "127.0.0.1";  // Default for local connections
     env["REMOTE_HOST"] = "localhost";

@@ -77,6 +77,10 @@ bool Parser::hasCompleteHeaders(const std::string &buf) const
 
 int Parser::parseRequestLine(const std::string &line, Request &out) const
 {
+    if (line.empty() || line[0] == ' ' || line[line.size() - 1] == ' ')
+        return 400;
+    if (line.find("  ") != std::string::npos)
+        return 400;
     std::string method, target, version;
     if (!split3(line, method, target, version))
         return 400;
@@ -147,6 +151,12 @@ Parser::Result Parser::parseOne(std::string &in_buf, Request &req, int &status, 
             status = 400;
             return PARSE_ERROR;
         }
+        if (colon > 0 && (line[colon - 1] == ' ' || line[colon - 1] == '\t'))
+        {
+            err = "space before colon";
+            status = 400;
+            return PARSE_ERROR;
+        }
 
         std::string key = toLower(trim(line.substr(0, colon)));
         std::string val = trim(line.substr(colon + 1));
@@ -170,6 +180,12 @@ Parser::Result Parser::parseOne(std::string &in_buf, Request &req, int &status, 
     }
 
     req.headers = norm.single;
+    for (std::map<std::string, std::vector<std::string> >::const_iterator it = norm.multi.begin();
+         it != norm.multi.end(); ++it)
+    {
+        if (!it->second.empty() && req.headers.find(it->first) == req.headers.end())
+            req.headers[it->first] = it->second.back();
+    }
     req.content_length = norm.content_length;
     req.has_body = norm.has_content_length && norm.content_length > 0;
     if (req.method_enum == METHOD_HEAD)

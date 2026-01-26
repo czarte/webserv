@@ -11,6 +11,7 @@ Location::Location()
 		_cgi_path(),
 		_cgi_ext(),
 		_upload_path(),
+		_auth_basic(),
 		_cgi_enabled(false),
 		_client_max_body_size(-1)
 {
@@ -27,6 +28,7 @@ Location::Location(const std::string& path)
       _cgi_path(),
       _cgi_ext(),
       _upload_path(),
+      _auth_basic(),
 	  _cgi_enabled(false),
 	  _client_max_body_size(-1)
 {
@@ -85,6 +87,11 @@ std::vector<std::string> Location::getCgiExt() const
 std::string Location::getUploadPath() const
 {
     return _upload_path;
+}
+
+std::string Location::getAuthBasic() const
+{
+    return _auth_basic;
 }
 
 bool Location::isCgiEnabled() const
@@ -159,6 +166,11 @@ void Location::addCgiExt(const std::string& cgi_ext)
 void Location::setUploadPath(const std::string& upload_path)
 {
     _upload_path = upload_path;
+}
+
+void Location::setAuthBasic(const std::string& auth_basic)
+{
+    _auth_basic = auth_basic;
 }
 
 void Location::setCgiEnabled(bool enabled)

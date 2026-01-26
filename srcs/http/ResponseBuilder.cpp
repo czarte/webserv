@@ -4,6 +4,7 @@
 #include "utils/Logger.hpp"
 
 #include <cctype>
+#include <ctime>
 #include <sstream>
 
 namespace
@@ -22,14 +23,30 @@ const char *statusMessage(int status)
     {
     case 201: return "Created";
     case 200: return "OK";
+    case 401: return "Unauthorized";
     case 400: return "Bad Request";
     case 403: return "Forbidden";
     case 404: return "Not Found";
     case 405: return "Method Not Allowed";
+    case 414: return "URI Too Long";
     case 413: return "Payload Too Large";
+    case 431: return "Request Header Fields Too Large";
     case 500: return "Internal Server Error";
     default:  return "Error";
     }
+}
+
+std::string formatHttpDate(std::time_t t)
+{
+    char buf[64];
+    std::tm tm;
+#if defined(_WIN32)
+    gmtime_s(&tm, &t);
+#else
+    gmtime_r(&t, &tm);
+#endif
+    std::strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S GMT", &tm);
+    return std::string(buf);
 }
 
 std::string replaceAll(std::string s, const std::string &from, const std::string &to)
@@ -123,7 +140,12 @@ std::string buildResponse(int status, const std::string &body, bool keep_alive,
                           const std::map<std::string, std::string> &extra_headers)
 {
     std::ostringstream out;
+    std::time_t now = std::time(NULL);
+    std::string date = formatHttpDate(now);
     out << "HTTP/1.1 " << status << " " << statusMessage(status) << "\r\n";
+    out << "Date: " << date << "\r\n";
+    out << "Server: webserv\r\n";
+    out << "Last-Modified: " << date << "\r\n";
     out << "Content-Length: " << body.size() << "\r\n";
     out << "Content-Type: " << content_type << "\r\n";
     for (std::map<std::string, std::string>::const_iterator it = extra_headers.begin();

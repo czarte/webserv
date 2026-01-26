@@ -25,8 +25,11 @@ struct Client
     size_t last_activity_ms;
     size_t header_start_ms;
     State state;
-    size_t body_bytes_read;
-    size_t body_bytes_expected;
+	size_t body_bytes_read;
+	size_t body_bytes_expected;
+	bool chunked;
+	size_t chunk_bytes_remaining;
+	bool chunk_reading_trailer;
 	bool cgi_request;           // New: indicates if this is a CGI request
 	std::string cgi_script_path; // New: full path to the CGI script
 	std::string cgi_bin_path;   // New: CGI bin directory

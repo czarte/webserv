@@ -13,6 +13,7 @@ Config::Config()
       _server_names(),
       _host(),
       _root(),
+      _cgi_bin_path(),
       _client_max_body_size(0),
       _index(),
       _error_page(),
@@ -27,6 +28,7 @@ Config::Config(int port, const std::string& server_name, const std::string& host
       _server_names(),
       _host(host),
       _root(root),
+      _cgi_bin_path(),
       _client_max_body_size(client_max_body_size),
       _index(index),
       _error_page(),
@@ -66,6 +68,11 @@ std::string Config::getRoot() const
     return _root;
 }
 
+std::string Config::getCgiBinPath() const
+{
+    return _cgi_bin_path;
+}
+
 int Config::getClientMaxBodySize() const
 {
     return _client_max_body_size;
@@ -81,7 +88,7 @@ ErrorPage Config::getErrorPage() const
     return _error_page;
 }
 
-std::vector<Location> Config::getLocations() const
+const std::vector<Location>& Config::getLocations() const
 {
     return _locations;
 }
@@ -127,6 +134,11 @@ void Config::setHost(const std::string& host)
 void Config::setRoot(const std::string& root)
 {
     _root = root;
+}
+
+void Config::setCgiBinPath(const std::string& path)
+{
+    _cgi_bin_path = path;
 }
 
 void Config::setClientMaxBodySize(int size)

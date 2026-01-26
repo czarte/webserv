@@ -4,10 +4,129 @@
 #include "http/ResponseBuilder.hpp"
 
 #include <cerrno>
+#include <cctype>
 
 #include <sys/socket.h>
 #include <unistd.h>
 #include "io/NonBlocking.hpp"
+
+namespace
+{
+	const size_t kMaxRequestLine = 8192;
+	const size_t kMaxHeadersSize = 65536;
+
+	int parseChunkSize(const std::string &line, size_t &out)
+	{
+		std::string::size_type semi = line.find(';');
+		std::string size_part = (semi == std::string::npos) ? line : line.substr(0, semi);
+		size_part = serverutil::trim(size_part);
+		if (size_part.empty())
+			return 400;
+		size_t value = 0;
+		for (size_t i = 0; i < size_part.size(); ++i)
+		{
+			char c = size_part[i];
+			if (!std::isxdigit(static_cast<unsigned char>(c)))
+				return 400;
+			value *= 16;
+			if (c >= '0' && c <= '9')
+				value += static_cast<size_t>(c - '0');
+			else if (c >= 'a' && c <= 'f')
+				value += static_cast<size_t>(10 + c - 'a');
+			else if (c >= 'A' && c <= 'F')
+				value += static_cast<size_t>(10 + c - 'A');
+		}
+		out = value;
+		return 0;
+	}
+
+	int consumeChunked(Client &conn, std::string &err)
+	{
+		for (;;)
+		{
+			if (conn.chunk_reading_trailer)
+			{
+				if (conn.in_buf.size() >= 2 && conn.in_buf.compare(0, 2, "\r\n") == 0)
+				{
+					conn.in_buf.erase(0, 2);
+					conn.chunk_reading_trailer = false;
+					conn.chunked = false;
+					return 1;
+				}
+
+				std::string::size_type end = conn.in_buf.find("\r\n\r\n");
+				if (end == std::string::npos)
+					return 0;
+				std::string trailer_block = conn.in_buf.substr(0, end + 4);
+				conn.in_buf.erase(0, end + 4);
+
+				std::string::size_type pos = 0;
+				while (pos < trailer_block.size())
+				{
+					std::string::size_type next = trailer_block.find("\r\n", pos);
+					if (next == std::string::npos)
+						break;
+					if (next == pos)
+						break;
+					std::string line = trailer_block.substr(pos, next - pos);
+					pos = next + 2;
+
+					std::string::size_type colon = line.find(':');
+					if (colon == std::string::npos)
+					{
+						err = "bad trailer header";
+						return -1;
+					}
+					std::string key = serverutil::toLower(serverutil::trim(line.substr(0, colon)));
+					std::string val = serverutil::trim(line.substr(colon + 1));
+					if (key.empty())
+					{
+						err = "empty trailer key";
+						return -1;
+					}
+					conn.request.headers[key] = val;
+				}
+
+				conn.chunk_reading_trailer = false;
+				conn.chunked = false;
+				return 1;
+			}
+
+			if (conn.chunk_bytes_remaining == 0)
+			{
+				std::string::size_type line_end = conn.in_buf.find("\r\n");
+				if (line_end == std::string::npos)
+					return 0;
+				std::string line = conn.in_buf.substr(0, line_end);
+				conn.in_buf.erase(0, line_end + 2);
+				size_t size = 0;
+				if (parseChunkSize(line, size) != 0)
+				{
+					err = "bad chunk size";
+					return -1;
+				}
+				if (size == 0)
+				{
+					conn.chunk_reading_trailer = true;
+					continue;
+				}
+				conn.chunk_bytes_remaining = size;
+			}
+
+			if (conn.in_buf.size() < conn.chunk_bytes_remaining + 2)
+				return 0;
+			conn.request.body.append(conn.in_buf, 0, conn.chunk_bytes_remaining);
+			conn.in_buf.erase(0, conn.chunk_bytes_remaining);
+			if (conn.in_buf.size() < 2 || conn.in_buf.compare(0, 2, "\r\n") != 0)
+			{
+				err = "missing chunk CRLF";
+				return -1;
+			}
+			conn.in_buf.erase(0, 2);
+			conn.chunk_bytes_remaining = 0;
+		}
+	}
+}
 
 void Server::handleListeningEvent(int fd)
 {
@@ -79,6 +198,27 @@ void Server::handleClientRead(int fd)
         {
             if (conn.state == Client::READING_BODY)
             {
+                if (conn.chunked)
+                {
+                    std::string err;
+                    int rc = consumeChunked(conn, err);
+                    if (rc == 0)
+                        break;
+                    if (rc < 0)
+                    {
+                        conn.keep_alive = false;
+                        conn.out_buf += buildErrorResponse(400, false, err);
+                        conn.state = Client::WRITING;
+                        serverutil::resetRequest(conn);
+                        break;
+                    }
+                    conn.state = Client::READING_HEADERS;
+                    handleReadyRequest(conn, _configs);
+                    if (conn.state == Client::WRITING)
+                        break;
+                    continue;
+                }
+
                 size_t remaining = conn.body_bytes_expected - conn.body_bytes_read;
                 if (remaining == 0)
                 {
@@ -100,6 +240,44 @@ void Server::handleClientRead(int fd)
                 if (conn.state == Client::WRITING)
                     break;
                 continue;
+            }
+
+            std::string::size_type line_end = conn.in_buf.find("\r\n");
+            if (line_end == std::string::npos)
+            {
+                if (conn.in_buf.size() > kMaxRequestLine)
+                {
+                    conn.keep_alive = false;
+                    conn.out_buf += buildErrorResponse(414, false, "Request line too long");
+                    conn.state = Client::WRITING;
+                    break;
+                }
+            }
+            else if (line_end > kMaxRequestLine)
+            {
+                conn.keep_alive = false;
+                conn.out_buf += buildErrorResponse(414, false, "Request line too long");
+                conn.state = Client::WRITING;
+                break;
+            }
+
+            std::string::size_type header_end = conn.in_buf.find("\r\n\r\n");
+            if (header_end == std::string::npos)
+            {
+                if (conn.in_buf.size() > kMaxHeadersSize)
+                {
+                    conn.keep_alive = false;
+                    conn.out_buf += buildErrorResponse(431, false, "Headers too large");
+                    conn.state = Client::WRITING;
+                    break;
+                }
+            }
+            else if (header_end > kMaxHeadersSize)
+            {
+                conn.keep_alive = false;
+                conn.out_buf += buildErrorResponse(431, false, "Headers too large");
+                conn.state = Client::WRITING;
+                break;
             }
 
             int status = 200;
@@ -147,6 +325,18 @@ void Server::handleClientRead(int fd)
                 conn.state = Client::WRITING;
                 serverutil::resetRequest(conn);
                 break;
+            }
+
+            std::map<std::string, std::string>::iterator it_te =
+                conn.request.headers.find("transfer-encoding");
+            if (it_te != conn.request.headers.end()
+                && serverutil::toLower(it_te->second) == "chunked")
+            {
+                conn.chunked = true;
+                conn.chunk_bytes_remaining = 0;
+                conn.chunk_reading_trailer = false;
+                conn.state = Client::READING_BODY;
+                continue;
             }
 
             if (conn.request.has_body)

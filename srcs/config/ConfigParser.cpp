@@ -223,8 +223,7 @@ void ConfigParser::parseServerDirective(const std::string& directive, const std:
     {
         if (tokens.size() < 2)
             throwError("cgi-bin directive requires a value", _current_line);
-        // Currently unused by this server; accept for compatibility.
-        (void)tokens;
+        config.setCgiBinPath(tokens[1]);
     }
     else if (directive == "host")
     {
@@ -417,8 +416,7 @@ void ConfigParser::parseLocationDirective(const std::string& directive, const st
     {
         if (tokens.size() < 2)
             throwError("auth_basic directive requires a value", _current_line);
-        // Not implemented; accept for compatibility.
-        (void)tokens;
+        location.setAuthBasic(tokens[1]);
     }
     else
     {

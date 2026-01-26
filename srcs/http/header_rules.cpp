@@ -163,6 +163,20 @@ static bool handle_host(const std::vector<std::string>& vals,
         status = 400;
         return false;
     }
+    for (size_t i = 0; i < vals[0].size(); ++i) {
+        char c = vals[0][i];
+        if (c == '@' || c == ' ' || c == '\t') {
+            err = "invalid host";
+            status = 400;
+            return false;
+        }
+        if (!(std::isalnum(static_cast<unsigned char>(c)) ||
+              c == '.' || c == '-' || c == ':' || c == '[' || c == ']')) {
+            err = "invalid host";
+            status = 400;
+            return false;
+        }
+    }
     out.single["host"] = vals[0];
     logv(verbose, "RULE host: UNIQUE, count=" + count + " -> OK");
     return true;
@@ -390,10 +404,9 @@ static bool finalize_checks(NormalizedHeaders& out,
     bool has_cl = out.has_content_length;
     bool conflict = (has_te && has_cl);
     logv(verbose, std::string("CHECK TE+CL conflict: ") + (conflict ? "FAIL" : "OK"));
-    if (conflict) {
-        err = "transfer-encoding with content-length";
-        status = 400;
-        return false;
+    if (conflict && out.chunked) {
+        out.has_content_length = false;
+        out.content_length = 0;
     }
 
     return true;

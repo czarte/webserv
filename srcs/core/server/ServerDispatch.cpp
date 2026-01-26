@@ -143,6 +143,15 @@ namespace
                     body = readFile(idx_path, ok);
                     content_type = contentTypeForPath(idx_path);
                 }
+                else if (index.find('.') == std::string::npos)
+                {
+                    std::string html_path = idx_path + ".html";
+                    if (isFile(html_path))
+                    {
+                        body = readFile(html_path, ok);
+                        content_type = contentTypeForPath(html_path);
+                    }
+                }
             }
 
             if (body.empty() && autoindex)

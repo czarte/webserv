@@ -22,6 +22,7 @@ public:
     std::vector<std::string> getCgiPath() const;
     std::vector<std::string> getCgiExt() const;
     std::string getUploadPath() const;
+    std::string getAuthBasic() const;
 	bool isCgiEnabled() const;  // New: check if CGI is enabled
 	std::string getCgiBinPath() const;  // New: get the actual CGI bin path
 	int getClientMaxBodySize() const;
@@ -37,6 +38,7 @@ public:
     void addCgiPath(const std::string& cgi_path);
     void addCgiExt(const std::string& cgi_ext);
     void setUploadPath(const std::string& upload_path);
+    void setAuthBasic(const std::string& auth_basic);
 	void setCgiEnabled(bool enabled);
 	void setClientMaxBodySize(int size);
 
@@ -51,6 +53,7 @@ private:
     std::vector<std::string> _cgi_path;
 	std::vector<std::string> _cgi_ext;
     std::string _upload_path;
+    std::string _auth_basic;
 	bool _cgi_enabled;
 	int _client_max_body_size;
 };

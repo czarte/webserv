@@ -30,10 +30,11 @@ public:
     std::vector<std::string> getServerNames() const;
     std::string getHost() const;
     std::string getRoot() const;
+    std::string getCgiBinPath() const;
     int getClientMaxBodySize() const;
     std::string getIndex() const;
     ErrorPage getErrorPage() const;
-    std::vector<Location> getLocations() const;
+    const std::vector<Location>& getLocations() const;
 	std::vector<Location> getLocations();
     
     // Setters
@@ -42,6 +43,7 @@ public:
     void addServerName(const std::string& server_name);
     void setHost(const std::string& host);
     void setRoot(const std::string& root);
+    void setCgiBinPath(const std::string& path);
     void setClientMaxBodySize(int size);
     void setIndex(const std::string& index);
     void setErrorPage(const ErrorPage& error_page);
@@ -54,6 +56,7 @@ private:
     std::vector<std::string> _server_names;
     std::string _host;
     std::string _root;
+    std::string _cgi_bin_path;
     int _client_max_body_size;
     std::string _index;
     ErrorPage _error_page;
