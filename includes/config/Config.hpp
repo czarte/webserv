@@ -36,6 +36,7 @@ public:
     ErrorPage getErrorPage() const;
     const std::vector<Location>& getLocations() const;
 	std::vector<Location> getLocations();
+    bool getSessionEnabled() const;
     
     // Setters
     void setPort(int port);
@@ -48,6 +49,7 @@ public:
     void setIndex(const std::string& index);
     void setErrorPage(const ErrorPage& error_page);
     void addLocation(const Location& location);
+    void setSessionEnabled(bool enabled);
 	void logDebug() const;
 
 private:
@@ -61,6 +63,7 @@ private:
     std::string _index;
     ErrorPage _error_page;
     std::vector<Location> _locations;
+    bool _session_enabled;
 
 };
 

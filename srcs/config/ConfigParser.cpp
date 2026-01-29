@@ -286,6 +286,15 @@ void ConfigParser::parseServerDirective(const std::string& directive, const std:
         ep.path = tokens[2];
         config.setErrorPage(ep);
     }
+    else if (directive == "session")
+    {
+        if (tokens.size() < 2)
+            throwError("session directive requires a value", _current_line);
+        std::string v = tokens[1];
+        if (v != "on" && v != "off")
+            throwError("session directive must be 'on' or 'off'", _current_line);
+        config.setSessionEnabled(v == "on");
+    }
     else
     {
         throwError("Unknown server directive: " + directive, _current_line);

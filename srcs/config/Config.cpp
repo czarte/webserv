@@ -17,7 +17,8 @@ Config::Config()
       _client_max_body_size(0),
       _index(),
       _error_page(),
-      _locations()
+      _locations(),
+      _session_enabled(true)
 {
 }
 
@@ -32,7 +33,8 @@ Config::Config(int port, const std::string& server_name, const std::string& host
       _client_max_body_size(client_max_body_size),
       _index(index),
       _error_page(),
-      _locations()
+      _locations(),
+      _session_enabled(true)
 {
     if (!server_name.empty())
         _server_names.push_back(server_name);
@@ -98,6 +100,11 @@ std::vector<Location> Config::getLocations()
 	return _locations;
 }
 
+bool Config::getSessionEnabled() const
+{
+    return _session_enabled;
+}
+
 // Setters
 void Config::setPort(int port)
 {
@@ -161,6 +168,11 @@ void Config::addLocation(const Location& location)
     _locations.push_back(location);
 }
 
+void Config::setSessionEnabled(bool enabled)
+{
+    _session_enabled = enabled;
+}
+
 void Config::logDebug() const
 {
 	LOG_DBG << "\n=== Config Debug ==="
@@ -172,6 +184,7 @@ void Config::logDebug() const
 			<< "\n index=" << _index
 			<< "\n error_page.code=" << _error_page.code
 			<< "\n error_page.path=" << _error_page.path
+			<< "\n session_enabled=" << (_session_enabled ? "true" : "false")
 			<< "\n locations.count=" << _locations.size();
 
 	if (!_server_names.empty())

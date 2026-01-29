@@ -14,7 +14,9 @@ Location matchLocation(const Config &config, const std::string &target)
 		LOG_DBG << "LOG_DBG matchLocation path: " << path << " target: " << target << " compare: " << target.compare(0, path.size(), path);
         if (path.empty())
             continue;
-        bool prefix_match = (target.compare(0, path.size(), path) == 0);
+        bool prefix_match = false;
+        if (target.size() >= path.size())
+            prefix_match = (target.compare(0, path.size(), path) == 0);
         if (!prefix_match && path.size() > 1 && path[path.size() - 1] == '/')
         {
             std::string path_no_slash = path.substr(0, path.size() - 1);
@@ -34,7 +36,8 @@ Location matchLocation(const Config &config, const std::string &target)
             }
         }
         else
-            boundary_ok = (target.size() == path.size() || target[path.size()] == '/');
+            boundary_ok = (target.size() == path.size()
+                || (target.size() > path.size() && target[path.size()] == '/'));
         if (prefix_match && boundary_ok && path.size() >= best_len)
         {
 			best = locations[i];

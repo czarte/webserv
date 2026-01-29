@@ -61,7 +61,6 @@ set(CONFIG_SRCS
 # IO sources
 set(IO_SRCS
         srcs/io/Socket.cpp
-        srcs/io/File.cpp
         srcs/io/NonBlocking.cpp
         srcs/io/FileSystem.cpp
 )

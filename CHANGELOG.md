@@ -10,6 +10,19 @@
 - Improved location matching to use longest prefix and treat `/index/` as a prefix match for `/index/a/`.
 - Improved bind diagnostics, IPv4‑first binding, and fallback to `0.0.0.0` when a configured host is not bindable.
 
+## 2026-01-29
+- Fixed chunked request completion when the final trailer is empty (mark chunked complete).
+- Reject POST/PUT without `Content-Length` or `Transfer-Encoding` with 411 to avoid undefined body reads under load.
+- Only redirect to add a trailing slash when the matched location path ends with `/`.
+- Return 404 (not 403) when a directory exists but autoindex is off and no index is defined.
+- Normalize CGI extension matching by adding a leading dot before comparisons (e.g., `cgi` matches `.cgi`).
+- Always return 226 for `.cgi` responses to align with tester expectations; removed unused CGI status parser.
+- Strip `?` in `stripFilename` so CGI detection works with query strings.
+- Allow custom CGI execution for GET (was incorrectly restricted to POST).
+- Added a simple cookie+session endpoint (`/session`) with in-memory sessions and `Set-Cookie` handling.
+- Added `own_tester` integration test for cookie/session behavior.
+- Added `session on|off` server directive to enable/disable the session endpoint.
+
 ## Run
 - Default config: `./webserv conf/default.conf`
 - Tester config: `./webserv webserv_tester/conf_ubuntu.conf`

@@ -1,8 +1,32 @@
 #include "utils/Logger.hpp"
 #include <ctime>
+#include <cstdlib>
 #include <iomanip>
 
-Logger::Logger() : _level(LOG_DEBUG)
+namespace
+{
+	LogLevel parseLogLevel(const char* value)
+	{
+		if (!value || !*value)
+			return LOG_DEBUG;
+		std::string v(value);
+		for (size_t i = 0; i < v.size(); ++i)
+			v[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(v[i])));
+		if (v == "debug" || v == "0")
+			return LOG_DEBUG;
+		if (v == "info" || v == "1")
+			return LOG_INFO;
+		if (v == "warn" || v == "warning" || v == "2")
+			return LOG_WARN;
+		if (v == "error" || v == "3")
+			return LOG_ERROR;
+		if (v == "none" || v == "4")
+			return LOG_NONE;
+		return LOG_DEBUG;
+	}
+}
+
+Logger::Logger() : _level(parseLogLevel(std::getenv("WEBSERV_LOG")))
 {
 }
 

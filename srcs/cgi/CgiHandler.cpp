@@ -190,7 +190,7 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
     }
 
     // Remote address (if available)
-    env["REMOTE_ADDR"] = "127.0.0.1";  // Default for local connections
+    env["REMOTE_ADDR"] = "127.0.0.1";
     env["REMOTE_HOST"] = "localhost";
 
     return env;
@@ -251,7 +251,6 @@ void CgiHandler::parseUrlParameters(const std::string& queryString, std::map<std
             std::string key = param.substr(0, equalPos);
             std::string value = param.substr(equalPos + 1);
 
-            // Convert to uppercase and prefix with QUERY_
             std::string envKey = "QUERY_";
             for (size_t i = 0; i < key.length(); ++i)
             {

@@ -24,7 +24,6 @@ CONFIG_SRCS := \
 
 IO_SRCS := \
 	srcs/io/Socket.cpp \
-	srcs/io/File.cpp \
 	srcs/io/NonBlocking.cpp \
 	srcs/io/FileSystem.cpp
 

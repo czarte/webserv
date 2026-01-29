@@ -15,6 +15,8 @@
 #include <cctype>
 #include <cstring>
 #include <cstdlib>
+#include <ctime>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <sys/stat.h>
@@ -30,6 +32,141 @@ namespace
 	const size_t kMaxRequestLine = 8192;
 	const size_t kMaxHeadersSize = 65536;
 	const size_t kBodyFileThreshold = 1024 * 1024;
+	const size_t kSessionTtlSeconds = 3600;
+
+	struct SessionData
+	{
+		std::string id;
+		std::string value;
+		std::time_t expires_at;
+	};
+
+	std::map<std::string, SessionData> g_sessions;
+	unsigned long g_session_counter = 0;
+
+	std::string generateSessionId()
+	{
+		std::time_t now = std::time(NULL);
+		++g_session_counter;
+		std::ostringstream oss;
+		oss << std::hex << now << "-" << getpid() << "-" << g_session_counter;
+		return oss.str();
+	}
+
+	void cleanupSessions(std::time_t now)
+	{
+		for (std::map<std::string, SessionData>::iterator it = g_sessions.begin();
+			 it != g_sessions.end(); )
+		{
+			if (it->second.expires_at <= now)
+				g_sessions.erase(it++);
+			else
+				++it;
+		}
+	}
+
+	std::map<std::string, std::string> parseCookieHeader(const std::string &header)
+	{
+		std::map<std::string, std::string> cookies;
+		std::string::size_type start = 0;
+		while (start < header.size())
+		{
+			std::string::size_type end = header.find(';', start);
+			if (end == std::string::npos)
+				end = header.size();
+			std::string part = serverutil::trim(header.substr(start, end - start));
+			if (!part.empty())
+			{
+				std::string::size_type eq = part.find('=');
+				if (eq != std::string::npos)
+				{
+					std::string key = serverutil::trim(part.substr(0, eq));
+					std::string val = serverutil::trim(part.substr(eq + 1));
+					if (!key.empty())
+						cookies[key] = val;
+				}
+			}
+			start = end + 1;
+		}
+		return cookies;
+	}
+
+	std::string getQueryValue(const std::string &query, const std::string &key)
+	{
+		std::string needle = key + "=";
+		std::string::size_type pos = query.find(needle);
+		if (pos == std::string::npos)
+			return "";
+		pos += needle.size();
+		std::string::size_type end = query.find('&', pos);
+		if (end == std::string::npos)
+			end = query.size();
+		return query.substr(pos, end - pos);
+	}
+
+	bool handleSessionEndpoint(Client &connection, const std::string &uri)
+	{
+		if (uri != "/session" && uri != "/session/")
+			return false;
+
+		std::time_t now = std::time(NULL);
+		cleanupSessions(now);
+
+		std::string cookie_header;
+		std::map<std::string, std::string>::iterator it_cookie = connection.request.headers.find("cookie");
+		if (it_cookie != connection.request.headers.end())
+			cookie_header = it_cookie->second;
+
+		std::map<std::string, std::string> cookies = parseCookieHeader(cookie_header);
+		std::string session_id;
+		if (cookies.find("session_id") != cookies.end())
+			session_id = cookies["session_id"];
+
+		bool is_new = false;
+		std::map<std::string, SessionData>::iterator it_sess = g_sessions.find(session_id);
+		if (session_id.empty() || it_sess == g_sessions.end())
+		{
+			SessionData sess;
+			sess.id = generateSessionId();
+			sess.value = "";
+			sess.expires_at = now + kSessionTtlSeconds;
+			g_sessions[sess.id] = sess;
+			session_id = sess.id;
+			it_sess = g_sessions.find(session_id);
+			is_new = true;
+		}
+		else
+		{
+			it_sess->second.expires_at = now + kSessionTtlSeconds;
+		}
+
+		std::string new_value = getQueryValue(connection.request.query, "value");
+		if (!new_value.empty())
+			it_sess->second.value = new_value;
+
+		std::ostringstream body;
+		body << "session_id=" << it_sess->second.id << "\n";
+		body << "value=" << it_sess->second.value << "\n";
+		body << "new=" << (is_new ? "1" : "0") << "\n\n";
+
+		std::ostringstream html;
+		html << "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+			 << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+			 << "<title>Session</title><link rel=\"stylesheet\" href=\"/style.css\"></head><body>"
+			 << "<pre>" << body.str() << "</pre></body></html>";
+
+		std::map<std::string, std::string> extra;
+		if (is_new)
+			extra["Set-Cookie"] = "session_id=" + it_sess->second.id + "; Path=/; HttpOnly";
+		extra["Cache-Control"] = "no-store";
+
+		connection.out_buf += buildResponse(200, html.str(), connection.keep_alive,
+											"text/html", connection.request.method_enum != METHOD_HEAD,
+											extra);
+		connection.state = Client::WRITING;
+		serverutil::resetRequest(connection);
+		return true;
+	}
 
 	std::string dirName(const std::string &path)
 	{
@@ -861,51 +998,6 @@ namespace
 		connection.resetCgiInfo();
 	}
 
-	// bool handleWriteToRoot(Client &conn, const std::string &root, const std::string &uri,
-	// 					   ErrorPages *pages, bool head_only)
-	// {
-	// 	if (conn.request.method_enum != METHOD_PUT && conn.request.method_enum != METHOD_POST)
-	// 		return false;
-
-	// 	if (root.empty())
-	// 	{
-	// 		respondError(conn, 403, "root.empty()", pages, head_only);
-	// 		return true;
-	// 	}
-
-	// 	std::string out_path = joinPath(root, uri);
-	// 	std::string::size_type slash = out_path.find_last_of('/');
-	// 	if (slash != std::string::npos)
-	// 	{
-	// 		std::string parent = out_path.substr(0, slash);
-	// 		if (!ensureDirExists(parent))
-	// 		{
-	// 			respondError(conn, 403, "cannot create parent directory", pages, head_only);
-	// 			return true;
-	// 		}
-	// 	}
-	// 	if (!serverutil::isPathWithinRoot(root, out_path))
-	// 	{
-	// 		respondError(conn, 403, "!serverutil::isPathWithinRoot(root, out_path)", pages, head_only);
-	// 		return true;
-	// 	}
-	// 	if (isDirectory(out_path))
-	// 	{
-	// 		respondError(conn, 403, "isDirectory(out_path)", pages, head_only);
-	// 		return true;
-	// 	}
-
-	// 	bool existed = isFile(out_path);
-	// 	if (!writeFile(out_path, conn.request.body))
-	// 	{
-	// 		respondError(conn, 500, "!writeFile(out_path, conn.request.body)", pages, head_only);
-	// 		return true;
-	// 	}
-
-	// 	int status = existed ? 204 : 201;
-	// 	respondText(conn, status, existed ? "No Content\n" : "Created\n", head_only);
-	// 	return true;
-	// }
 
 
 
@@ -1629,11 +1721,13 @@ void Worker::handleReadyRequest(Client &connection)
             << " file=" << connection.request.file_name
             << " query=" << connection.request.query;
 
+    const Config &cfg = _configs[connection.config_index];
+    LOG_DBG << "handleReadyRequest uri: " << uri;
     if (uri.empty())
         uri = "/";
 
-    const Config &cfg = _configs[connection.config_index];
-    LOG_DBG << "handleReadyRequest uri: " << uri;
+    if (cfg.getSessionEnabled() && handleSessionEndpoint(connection, uri))
+        return;
 
     Location loc = matchLocation(cfg, uri);
 
@@ -2002,6 +2096,11 @@ void Worker::checkTimeouts()
 
 	for (std::map<int, Client>::iterator it = _clients.begin(); it != _clients.end(); )
 	{
+		if (it->second.req_phase == Client::PHASE_BODY)
+		{
+			++it;
+			continue;
+		}
 		if (elapsed_ms(it->second.last_activity_ms) > serverutil::kIdleTimeoutMs)
 		{
 			int fd = it->first;
