@@ -9,6 +9,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <limits.h>
+#include <unistd.h>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -36,8 +37,6 @@ namespace serverutil
         {
             std::string allow = toLower(allowed[i]);
             if (allow == want)
-                return true;
-            if (want == "head" && allow == "get")
                 return true;
         }
         return false;
@@ -115,9 +114,22 @@ namespace serverutil
         conn.request = Request();
         conn.body_bytes_read = 0;
         conn.body_bytes_expected = 0;
+		conn.req_phase = Client::PHASE_HEADERS;
         conn.chunked = false;
         conn.chunk_bytes_remaining = 0;
         conn.chunk_reading_trailer = false;
+        conn.chunked_complete = false;
+		if (conn.body_tmp_fd >= 0)
+		{
+			close(conn.body_tmp_fd);
+			conn.body_tmp_fd = -1;
+		}
+		if (!conn.body_tmp_path.empty())
+		{
+			unlink(conn.body_tmp_path.c_str());
+			conn.body_tmp_path.clear();
+		}
+		conn.body_to_file = false;
     }
 
 	inline Config getConfigForConnection(const Client &conn,

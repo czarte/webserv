@@ -15,6 +15,11 @@ struct Client
 		READING_BODY,
 		WRITING
 	};
+	enum ReqPhase
+	{
+		PHASE_HEADERS,
+		PHASE_BODY
+	};
 
     int fd;
     std::string in_buf;
@@ -25,11 +30,16 @@ struct Client
     size_t last_activity_ms;
     size_t header_start_ms;
     State state;
+	ReqPhase req_phase;
 	size_t body_bytes_read;
 	size_t body_bytes_expected;
 	bool chunked;
 	size_t chunk_bytes_remaining;
 	bool chunk_reading_trailer;
+	bool chunked_complete;
+	std::string body_tmp_path;
+	int body_tmp_fd;
+	bool body_to_file;
 	bool cgi_request;           // New: indicates if this is a CGI request
 	std::string cgi_script_path; // New: full path to the CGI script
 	std::string cgi_bin_path;   // New: CGI bin directory

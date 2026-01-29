@@ -13,7 +13,7 @@ std::pair<std::string, std::string> stripQuery(const std::string &target)
 
 std::pair<std::string, std::string> stripFilename(const std::string &target)
 {
-	std::string::size_type q = target.find_first_of("&#");
+	std::string::size_type q = target.find_first_of("?#&");
 	if (q == std::string::npos)
 		return std::make_pair(target.substr(0, q), "");
 	return std::make_pair(target.substr(0, q), target.substr(q));

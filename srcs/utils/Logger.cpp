@@ -71,7 +71,7 @@ void Logger::log(LogLevel level, const std::string& msg)
 	if (level < _level)
 		return;
 
-	std::ostream& out = (level >= LOG_ERROR) ? std::cerr : std::cout;
+	std::ostream& out = std::cerr;
 	out << getTimestamp() << " [" << getLevelString(level) << "] " << msg << std::endl;
 }
 

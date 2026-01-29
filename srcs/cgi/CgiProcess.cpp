@@ -9,7 +9,7 @@
 #include <cstdio>
 
 CgiProcess::CgiProcess()
-    : _exitStatus(-1), _hasError(false)
+    : _inputFd(-1), _exitStatus(-1), _hasError(false)
 {
 }
 
@@ -42,21 +42,38 @@ void CgiProcess::setInputData(const std::string& data)
     _inputData = data;
 }
 
+void CgiProcess::setInputFd(int fd)
+{
+    _inputFd = fd;
+}
+
 std::string CgiProcess::execute()
 {
     _output.clear();
     _hasError = false;
     _errorMessage.clear();
 
-    // Create pipes for communication
-    int inputPipe[2];  // For sending data to CGI script
     int outputPipe[2]; // For receiving data from CGI script
 
-    if (pipe(inputPipe) == -1 || pipe(outputPipe) == -1)
+    if (pipe(outputPipe) == -1)
     {
         _hasError = true;
         _errorMessage = "Failed to create pipes: " + std::string(strerror(errno));
         return "";
+    }
+
+    int inputPipe[2];
+    bool useInputPipe = (_inputFd < 0);
+    if (useInputPipe)
+    {
+        if (pipe(inputPipe) == -1)
+        {
+            _hasError = true;
+            _errorMessage = "Failed to create pipes: " + std::string(strerror(errno));
+            close(outputPipe[0]);
+            close(outputPipe[1]);
+            return "";
+        }
     }
 
     pid_t pid = fork();
@@ -65,8 +82,11 @@ std::string CgiProcess::execute()
     {
         _hasError = true;
         _errorMessage = "Failed to fork process: " + std::string(strerror(errno));
-        close(inputPipe[0]);
-        close(inputPipe[1]);
+        if (useInputPipe)
+        {
+            close(inputPipe[0]);
+            close(inputPipe[1]);
+        }
         close(outputPipe[0]);
         close(outputPipe[1]);
         return "";
@@ -74,27 +94,42 @@ std::string CgiProcess::execute()
 
     if (pid == 0)  // Child process
     {
-        handleChildProcess(inputPipe, outputPipe);
+        if (useInputPipe)
+            handleChildProcess(inputPipe, outputPipe);
+        else
+            handleChildProcessWithFd(outputPipe, _inputFd);
         // If we reach here, execve failed
         exit(1);
     }
     else  // Parent process
     {
         // Close unused pipe ends
-        close(inputPipe[0]);
+        if (useInputPipe)
+            close(inputPipe[0]);
         close(outputPipe[1]);
 
         // Write input data to child's stdin if needed
-        if (!_inputData.empty())
+        if (useInputPipe && !_inputData.empty())
         {
-            ssize_t written = write(inputPipe[1], _inputData.c_str(), _inputData.length());
-            if (written == -1)
+            size_t total_written = 0;
+            while (total_written < _inputData.size())
             {
-                _hasError = true;
-                _errorMessage = "Failed to write to child process: " + std::string(strerror(errno));
+                ssize_t written = write(inputPipe[1],
+                                        _inputData.c_str() + total_written,
+                                        _inputData.size() - total_written);
+                if (written < 0)
+                {
+                    if (errno == EINTR)
+                        continue;
+                    _hasError = true;
+                    _errorMessage = "Failed to write to child process: " + std::string(strerror(errno));
+                    break;
+                }
+                total_written += static_cast<size_t>(written);
             }
         }
-        close(inputPipe[1]);
+        if (useInputPipe)
+            close(inputPipe[1]);
 
         // Read output from child's stdout
         _output = readFromPipe(outputPipe[0]);
@@ -201,6 +236,66 @@ void CgiProcess::handleChildProcess(int inputPipe[2], int outputPipe[2])
 		_exit(126);  // Permission denied
 	else
 		_exit(125);  // Other exec error
+}
+
+void CgiProcess::handleChildProcessWithFd(int outputPipe[2], int inputFd)
+{
+	if (dup2(inputFd, STDIN_FILENO) == -1)
+	{
+		perror("dup2 stdin failed");
+		_exit(127);
+	}
+	close(inputFd);
+
+	if (dup2(outputPipe[1], STDOUT_FILENO) == -1)
+	{
+		perror("dup2 stdout failed");
+		_exit(127);
+	}
+	close(outputPipe[0]);
+	close(outputPipe[1]);
+
+	int max_fd = sysconf(_SC_OPEN_MAX);
+	for (int fd = 3; fd < max_fd; fd++)
+		close(fd);
+
+	char** env = createEnvironmentArray();
+	LOG_DBG << "cgi: env size=" << _environment.size();
+	if (!env)
+	{
+		const char* msg = "Failed to create environment array\n";
+		write(STDERR_FILENO, msg, strlen(msg));
+		_exit(126);
+	}
+
+	char** argv = createArgvArray();
+	if (!argv)
+	{
+		freeEnvironmentArray(env);
+		const char* msg = "Failed to create argv array\n";
+		write(STDERR_FILENO, msg, strlen(msg));
+		_exit(126);
+	}
+
+	execve(_interpreterPath.c_str(), argv, env);
+
+	int saved_errno = errno;
+	freeEnvironmentArray(env);
+	freeArgvArray(argv);
+
+	const char* msg = "execve failed: ";
+	write(STDERR_FILENO, msg, strlen(msg));
+	write(STDERR_FILENO, _interpreterPath.c_str(), _interpreterPath.length());
+	write(STDERR_FILENO, ": ", 2);
+	write(STDERR_FILENO, strerror(saved_errno), strlen(strerror(saved_errno)));
+	write(STDERR_FILENO, "\n", 1);
+
+	if (saved_errno == ENOENT)
+		_exit(127);
+	else if (saved_errno == EACCES)
+		_exit(126);
+	else
+		_exit(125);
 }
 
 char** CgiProcess::createEnvironmentArray()

@@ -9,7 +9,7 @@ namespace {
 
 static void logv(bool verbose, const std::string& s) {
     if (verbose) {
-        std::cout << s << "\n";
+        std::cerr << s << "\n";
     }
 }
 
@@ -319,7 +319,14 @@ static bool handle_expect(const std::vector<std::string>& vals,
                           int& status,
                           std::string& err,
                           bool verbose) {
-    (void)out;
+    if (vals.size() == 1) {
+        std::string v = to_lower(trim_ows(vals[0]));
+        if (v == "100-continue") {
+            out.single["expect"] = trim_ows(vals[0]);
+            logv(verbose, "RULE expect: 100-continue -> OK");
+            return true;
+        }
+    }
     logv(verbose, "RULE expect: UNIQUE, count=" + size_t_to_string(vals.size()) + " -> FAIL");
     logv(verbose, "DETAIL expect: unsupported -> 417");
     err = "unsupported expect";

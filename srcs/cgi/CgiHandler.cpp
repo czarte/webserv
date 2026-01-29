@@ -3,6 +3,7 @@
 #include "utils/Logger.hpp"
 #include <sstream>
 #include <cstdlib>
+#include <unistd.h>
 
 CgiHandler::CgiHandler()
     : _pythonInterpreter("/usr/bin/python3"),
@@ -47,9 +48,17 @@ std::string CgiHandler::handleRequest(const Client& connection, const std::strin
     cgiProcess.setEnvironment(cgiEnv);
 
     // If POST request with body, set input data
-    if (connection.request.method_enum == METHOD_POST && !connection.request.body.empty())
+    if (connection.request.method_enum == METHOD_POST)
     {
-        cgiProcess.setInputData(connection.request.body);
+        if (connection.body_to_file && connection.body_tmp_fd >= 0)
+        {
+            lseek(connection.body_tmp_fd, 0, SEEK_SET);
+            cgiProcess.setInputFd(connection.body_tmp_fd);
+        }
+        else if (!connection.request.body.empty())
+        {
+            cgiProcess.setInputData(connection.request.body);
+        }
     }
 
     // Execute the CGI script
@@ -195,6 +204,10 @@ std::string CgiHandler::getInterpreterPath(CGIMethod method)
             return _pythonInterpreter;
         case PHP:
             return _phpInterpreter;
+        case Shell:
+            return _pythonInterpreter;
+        case Static:
+            return _pythonInterpreter;
         default:
             return "";
     }

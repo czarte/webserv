@@ -110,10 +110,16 @@ std::string Location::getCgiBinPath() const
 	// Otherwise, combine root with cgi_path
 	if (!_alias.empty())
 		return _alias;
-	else if (!_root.empty() && !_cgi_path.empty())
-		return _root + "/" + _cgi_path[0];
 	else if (!_cgi_path.empty())
+	{
+		if (_cgi_path.size() >= 2)
+			return "";
+		if (!_cgi_path[0].empty() && _cgi_path[0][0] == '/')
+			return _cgi_path[0];
+		if (!_root.empty())
+			return _root + "/" + _cgi_path[0];
 		return _cgi_path[0];
+	}
 	return "";
 }
 

@@ -206,45 +206,46 @@ std::string buildCgiResponse(const std::string &cgi_headers, const std::string &
 	std::ostringstream response;
 
 	// Start with HTTP status line
-	// Check if CGI provided Status header
 	std::string status_line = "HTTP/1.1 200 OK";
-	size_t status_pos = cgi_headers.find("Status:");
-	if (status_pos != std::string::npos)
-	{
-		size_t end_pos = cgi_headers.find("\n", status_pos);
-		std::string status = cgi_headers.substr(status_pos + 7, end_pos - status_pos - 7);
-		status = serverutil::trim(status);
-		status_line = "HTTP/1.1 " + status;
-	}
-
-	response << status_line << "\r\n";
 
 	// Add CGI headers (except Status which we already processed)
 	std::istringstream header_stream(cgi_headers);
 	std::string header_line;
 	bool has_content_type = false;
 	bool has_content_length = false;
+	bool status_set = false;
+	std::ostringstream header_out;
 
 	while (std::getline(header_stream, header_line))
 	{
-		header_line = serverutil::trim(header_line);
-		if (header_line.empty())
+		std::string trimmed = serverutil::trim(header_line);
+		if (trimmed.empty())
 			continue;
 
-		// Skip Status header as we already processed it
-		if (header_line.find("Status:") == 0)
+		std::string lower = serverutil::toLower(trimmed);
+		if (lower.find("status:") == 0)
+		{
+			if (!status_set)
+			{
+				std::string status = serverutil::trim(trimmed.substr(7));
+				if (!status.empty())
+					status_line = "HTTP/1.1 " + status;
+				status_set = true;
+			}
 			continue;
+		}
 
-		if (header_line.find("Content-Type:") == 0 ||
-			header_line.find("content-type:") == 0)
+		if (lower.find("content-type:") == 0)
 			has_content_type = true;
 
-		if (header_line.find("Content-Length:") == 0 ||
-			header_line.find("content-length:") == 0)
+		if (lower.find("content-length:") == 0)
 			has_content_length = true;
 
-		response << header_line << "\r\n";
+		header_out << trimmed << "\r\n";
 	}
+
+	response << status_line << "\r\n";
+	response << header_out.str();
 
 	// Add default headers if not provided by CGI
 	if (!has_content_type)

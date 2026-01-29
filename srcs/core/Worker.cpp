@@ -14,6 +14,7 @@
 #include <cerrno>
 #include <cctype>
 #include <cstring>
+#include <cstdlib>
 #include <sstream>
 #include <stdexcept>
 #include <sys/stat.h>
@@ -28,6 +29,7 @@ namespace
 {
 	const size_t kMaxRequestLine = 8192;
 	const size_t kMaxHeadersSize = 65536;
+	const size_t kBodyFileThreshold = 1024 * 1024;
 
 	std::string dirName(const std::string &path)
 	{
@@ -257,6 +259,9 @@ namespace
 		return out;
 	}
 
+	bool ensureBodyTempFile(Client &conn, std::string &err);
+	bool writeBodyData(Client &conn, const char *data, size_t len, std::string &err);
+
 	int consumeChunked(Client &conn, std::string &err)
 	{
 		for (;;)
@@ -268,6 +273,7 @@ namespace
 					conn.in_buf.erase(0, 2);
 					conn.chunk_reading_trailer = false;
 					conn.chunked = false;
+					conn.chunked_complete = true;
 					return 1;
 				}
 
@@ -306,6 +312,7 @@ namespace
 
 				conn.chunk_reading_trailer = false;
 				conn.chunked = false;
+				conn.chunked_complete = true;
 				return 1;
 			}
 
@@ -330,9 +337,17 @@ namespace
 				conn.chunk_bytes_remaining = size;
 			}
 
+			if (conn.body_bytes_expected > 0
+				&& conn.body_bytes_read + conn.chunk_bytes_remaining > conn.body_bytes_expected)
+			{
+				err = "MAX BODY SIZE exceeded";
+				return -2;
+			}
+
 			if (conn.in_buf.size() < conn.chunk_bytes_remaining + 2)
 				return 0;
-			conn.request.body.append(conn.in_buf, 0, conn.chunk_bytes_remaining);
+			if (!writeBodyData(conn, conn.in_buf.data(), conn.chunk_bytes_remaining, err))
+				return -3;
 			conn.in_buf.erase(0, conn.chunk_bytes_remaining);
 			if (conn.in_buf.size() < 2 || conn.in_buf.compare(0, 2, "\r\n") != 0)
 			{
@@ -342,28 +357,6 @@ namespace
 			conn.in_buf.erase(0, 2);
 			conn.chunk_bytes_remaining = 0;
 		}
-	}
-
-	int parseCgiStatus(const std::string &headers, int fallback)
-	{
-		std::istringstream in(headers);
-		std::string line;
-		while (std::getline(in, line))
-		{
-			line = serverutil::trim(line);
-			if (line.empty())
-				continue;
-			if (line.find("Status:") == 0 || line.find("status:") == 0)
-			{
-				std::string value = serverutil::trim(line.substr(line.find(':') + 1));
-				std::istringstream ss(value);
-				int code = 0;
-				ss >> code;
-				if (code > 0)
-					return code;
-			}
-		}
-		return fallback;
 	}
 
 	std::string resolveCgiScriptPath(const Location &loc, const Config &cfg,
@@ -385,6 +378,59 @@ namespace
 			}
 		}
 		return request_path;
+	}
+
+	size_t effectiveBodyLimit(const Config &cfg, const Location &loc)
+	{
+		if (loc.getClientMaxBodySize() > 0)
+			return static_cast<size_t>(loc.getClientMaxBodySize());
+		if (cfg.getClientMaxBodySize() > 0)
+			return static_cast<size_t>(cfg.getClientMaxBodySize());
+		return 0;
+	}
+
+	bool ensureBodyTempFile(Client &conn, std::string &err)
+	{
+		if (conn.body_tmp_fd >= 0)
+			return true;
+		char tmpl[] = "/tmp/webserv_bodyXXXXXX";
+		int fd = mkstemp(tmpl);
+		if (fd < 0)
+		{
+			err = "mkstemp failed";
+			return false;
+		}
+		conn.body_tmp_fd = fd;
+		conn.body_tmp_path = tmpl;
+		return true;
+	}
+
+	bool writeBodyData(Client &conn, const char *data, size_t len, std::string &err)
+	{
+		if (len == 0)
+			return true;
+		if (conn.body_to_file)
+		{
+			size_t off = 0;
+			while (off < len)
+			{
+				ssize_t w = write(conn.body_tmp_fd, data + off, len - off);
+				if (w < 0)
+				{
+					if (errno == EINTR)
+						continue;
+					err = "body write failed";
+					return false;
+				}
+				off += static_cast<size_t>(w);
+			}
+		}
+		else
+		{
+			conn.request.body.append(data, len);
+		}
+		conn.body_bytes_read += len;
+		return true;
 	}
 
 	bool handleUpload(Client &conn, const Location *loc, const std::string &root,
@@ -551,6 +597,7 @@ namespace
 
 		if (isDirectory(path))
 		{
+			bool served_index = false;
 			if (!index.empty())
 			{
 				std::string idx_path = joinPath(path, index);
@@ -558,6 +605,7 @@ namespace
 				{
 					body = readFile(idx_path, ok);
 					content_type = contentTypeForPath(idx_path);
+					served_index = ok;
 				}
 				else if (index.find('.') == std::string::npos)
 				{
@@ -566,11 +614,12 @@ namespace
 					{
 						body = readFile(html_path, ok);
 						content_type = contentTypeForPath(html_path);
+						served_index = ok;
 					}
 				}
 			}
 
-			if (body.empty() && autoindex)
+			if (!served_index && autoindex)
 			{
 				body = buildAutoindex(path, uri);
 				if (body.empty())
@@ -579,7 +628,7 @@ namespace
 				ok = !body.empty();
 			}
 
-			if (body.empty() && !autoindex)
+			if (!served_index && !autoindex)
 				resp_status = 404;
 		}
 		else if (isFile(path))
@@ -679,7 +728,14 @@ namespace
 		// Determine interpreter based on file extension
 		std::string ext = getFileExtension(connection.request.file_name);
 		LOG_DBG << "cgi: ext=" << ext;
-		if (ext == ".py")
+		if (connection.request.cgi == Static)
+		{
+			if (!connection.cgi_bin_path.empty())
+				handler.setPythonInterpreter(connection.cgi_bin_path);
+			else
+				handler.setPythonInterpreter(connection.cgi_script_path);
+		}
+		else if (ext == ".py")
 		{
 			handler.setPythonInterpreter("/usr/bin/python3");
 			connection.request.cgi = Python;
@@ -766,8 +822,9 @@ namespace
 			headers += "Content-Type: CGI/MINE\r\n";
 		}
 
-		if (headers.find("Status:") == std::string::npos &&
-			headers.find("status:") == std::string::npos)
+		if (ext == ".cgi"
+			&& headers.find("Status:") == std::string::npos
+			&& headers.find("status:") == std::string::npos)
 		{
 			if (!headers.empty() && headers[headers.size() - 1] != '\n')
 				headers += "\r\n";
@@ -789,12 +846,12 @@ namespace
 				headers += "Content-Type: text/html\r\n";
 		}
 
-		if (ext == ".cgi")
-		{
-			int status = parseCgiStatus(headers, 226);
-			connection.out_buf += buildResponse(status, body, connection.keep_alive,
-												"CGI/MINE", !head_only);
-		}
+			if (ext == ".cgi")
+			{
+				int status = 226;
+				connection.out_buf += buildResponse(status, body, connection.keep_alive,
+													"CGI/MINE", !head_only);
+			}
 		else
 		{
 			connection.out_buf += buildCgiResponse(headers, body, connection.keep_alive, !head_only);
@@ -1123,15 +1180,22 @@ void Worker::handleClientRead(int fd)
 		return;
 	}
 
-	if (!conn.in_buf.empty())
-	{
-		Parser parser;
-		for (;;)
+		if (!conn.in_buf.empty())
 		{
-			if (conn.state == Client::READING_BODY)
+			Parser parser;
+			for (;;)
 			{
-				if (conn.chunked)
+				LOG_DBG << "phase=" << (conn.req_phase == Client::PHASE_HEADERS ? "PHASE_HEADERS" : "PHASE_BODY")
+						<< " state=" << (conn.state == Client::READING_HEADERS ? "READING_HEADERS" :
+										 conn.state == Client::READING_BODY ? "READING_BODY" : "WRITING")
+						<< " in_buf=" << conn.in_buf.size()
+						<< " out_buf=" << conn.out_buf.size()
+						<< " body=" << conn.body_bytes_read << "/" << conn.body_bytes_expected;
+
+				if (conn.req_phase == Client::PHASE_BODY)
 				{
+					if (conn.chunked)
+					{
 					std::string err;
 					int rc = consumeChunked(conn, err);
 					if (rc == 0)
@@ -1142,40 +1206,59 @@ void Worker::handleClientRead(int fd)
 						size_t idx = conn.config_index;
 						if (idx >= _error_pages.size())
 							idx = 0;
-						conn.out_buf += buildErrorResponse(400, false, err, &_error_pages[idx]);
+						int code = (rc == -2) ? 413 : 400;
+						conn.out_buf += buildErrorResponse(code, false, err, &_error_pages[idx]);
 						conn.state = Client::WRITING;
 						serverutil::resetRequest(conn);
 						break;
 					}
-					conn.state = Client::READING_HEADERS;
-					handleReadyRequest(conn);
-					if (conn.state == Client::WRITING)
-						break;
-					continue;
-				}
+					conn.state = Client::READING_BODY;
+						if (conn.chunked_complete)
+							handleReadyRequest(conn);
+						if (conn.state == Client::WRITING)
+							break;
+						conn.state = Client::READING_HEADERS;
+						conn.req_phase = Client::PHASE_HEADERS;
+						conn.chunked_complete = false;
+						continue;
+					}
 
 				size_t remaining = conn.body_bytes_expected - conn.body_bytes_read;
 				if (remaining == 0)
 				{
-					conn.state = Client::READING_HEADERS;
+					conn.state = Client::READING_BODY;
 				}
 				else
 				{
 					size_t take = remaining;
 					if (take > conn.in_buf.size())
 						take = conn.in_buf.size();
-					conn.request.body.append(conn.in_buf, 0, take);
+					{
+						std::string werr;
+						if (!writeBodyData(conn, conn.in_buf.data(), take, werr))
+						{
+							conn.keep_alive = false;
+							size_t idx = conn.config_index;
+							if (idx >= _error_pages.size())
+								idx = 0;
+							conn.out_buf += buildErrorResponse(500, false, werr, &_error_pages[idx]);
+							conn.state = Client::WRITING;
+							serverutil::resetRequest(conn);
+							break;
+						}
+					}
 					conn.in_buf.erase(0, take);
-					conn.body_bytes_read += take;
 					if (conn.body_bytes_read < conn.body_bytes_expected)
 						break;
-					conn.state = Client::READING_HEADERS;
+					conn.state = Client::READING_BODY;
 				}
-				handleReadyRequest(conn);
-				if (conn.state == Client::WRITING)
-					break;
-				continue;
-			}
+					handleReadyRequest(conn);
+					if (conn.state == Client::WRITING)
+						break;
+					conn.state = Client::READING_HEADERS;
+					conn.req_phase = Client::PHASE_HEADERS;
+					continue;
+				}
 
 			std::string::size_type line_end = conn.in_buf.find("\r\n");
 			if (line_end == std::string::npos)
@@ -1249,10 +1332,12 @@ void Worker::handleClientRead(int fd)
 					conn.keep_alive = true;
 			}
 
-			if (result == Parser::PARSE_ERROR || status != 200)
-			{
-				conn.keep_alive = false;
-				size_t idx = conn.config_index;
+				if (result == Parser::PARSE_ERROR || status != 200)
+				{
+					if (status == 417)
+						LOG_DBG << "sending 417 Expectation Failed";
+					conn.keep_alive = false;
+					size_t idx = conn.config_index;
 				if (idx >= _error_pages.size())
 					idx = 0;
 				conn.out_buf += buildErrorResponse(status, false, formatParseError(err), &_error_pages[idx]);
@@ -1263,50 +1348,234 @@ void Worker::handleClientRead(int fd)
 			conn.config_index = selectConfigIndex(_configs, conn.request);
 			const Config &cfg = _configs[conn.config_index];
 
-			size_t max_body = 0;
-			if (cfg.getClientMaxBodySize() > 0)
-				max_body = static_cast<size_t>(cfg.getClientMaxBodySize());
-			std::pair<std::string, std::string> uri_query = stripQuery(conn.request.target);
-			Location loc = matchLocation(cfg, uri_query.first);
-			if (loc.getClientMaxBodySize() > 0)
-				max_body = static_cast<size_t>(loc.getClientMaxBodySize());
+				std::pair<std::string, std::string> uri_query = stripQuery(conn.request.target);
+				Location loc = matchLocation(cfg, uri_query.first);
+				size_t max_body = effectiveBodyLimit(cfg, loc);
 
-			if (conn.request.has_body
-				&& max_body > 0
-				&& conn.request.content_length > max_body)
+				// Early 405 before any body read decisions (allow CGI extension override).
+				bool method_allowed = serverutil::isMethodAllowed(loc.getAllowedMethods(), conn.request.method);
+				bool cgi_allowed = false;
+				bool is_cgi_request = false;
+				if (loc.isCgiEnabled())
+				{
+					std::string ext = getFileExtension(stripFilename(uri_query.first).first);
+					std::vector<std::string> cgi_exts = loc.getCgiExt();
+					if (!cgi_exts.empty())
+					{
+					for (size_t i = 0; i < cgi_exts.size(); ++i)
+					{
+						std::string e = cgi_exts[i];
+							if (!e.empty() && e[0] != '.')
+								e = "." + e;
+							if (ext == e)
+							{
+								cgi_allowed = true;
+								is_cgi_request = true;
+								break;
+							}
+						}
+					}
+					else if (ext == ".py" || ext == ".php" || ext == ".sh" || ext == ".cgi")
+					{
+						cgi_allowed = true;
+						is_cgi_request = true;
+					}
+				}
+			if (!method_allowed && !cgi_allowed)
 			{
 				conn.keep_alive = false;
-				conn.out_buf += buildErrorResponse(413, false, "MAX BODY SIZE exceeded", &_error_pages[conn.config_index]);
+				conn.out_buf += buildErrorResponse(405, false, "Method Not Allowed",
+					&_error_pages[conn.config_index]);
 				conn.state = Client::WRITING;
 				serverutil::resetRequest(conn);
 				break;
 			}
 
-			std::map<std::string, std::string>::iterator it_te =
+				std::map<std::string, std::string>::const_iterator it_cl =
+					conn.request.headers.find("content-length");
+				std::map<std::string, std::string>::const_iterator it_te =
 					conn.request.headers.find("transfer-encoding");
-			if (it_te != conn.request.headers.end()
-				&& serverutil::toLower(it_te->second) == "chunked")
-			{
-				conn.chunked = true;
-				conn.chunk_bytes_remaining = 0;
-				conn.chunk_reading_trailer = false;
-				conn.state = Client::READING_BODY;
-				continue;
-			}
+				bool needs_body_len = (conn.request.method_enum == METHOD_POST
+					|| conn.request.method_enum == METHOD_PUT);
+				if (needs_body_len && it_cl == conn.request.headers.end()
+					&& it_te == conn.request.headers.end())
+				{
+					conn.keep_alive = false;
+					conn.out_buf += buildErrorResponse(411, false, "Length Required",
+						&_error_pages[conn.config_index]);
+					conn.state = Client::WRITING;
+					serverutil::resetRequest(conn);
+					break;
+				}
+					if (max_body > 0)
+					{
+						if (conn.request.has_body && conn.request.content_length > max_body)
+				{
+					conn.keep_alive = false;
+					conn.out_buf += buildErrorResponse(413, false, "MAX BODY SIZE exceeded",
+						&_error_pages[conn.config_index]);
+					conn.state = Client::WRITING;
+					serverutil::resetRequest(conn);
+					break;
+				}
+				if (it_cl != conn.request.headers.end())
+				{
+					size_t cl_value = 0;
+					std::istringstream ss(it_cl->second);
+					ss >> cl_value;
+					if (!ss.fail() && cl_value > max_body)
+					{
+						conn.keep_alive = false;
+						conn.out_buf += buildErrorResponse(413, false, "MAX BODY SIZE exceeded",
+							&_error_pages[conn.config_index]);
+						conn.state = Client::WRITING;
+						serverutil::resetRequest(conn);
+						break;
+					}
+					}
+				}
+
+				// Pre-body Expect: 100-continue validation gate.
+				std::map<std::string, std::string>::const_iterator it_exp =
+					conn.request.headers.find("expect");
+				bool expect_continue = false;
+				if (it_exp != conn.request.headers.end())
+				{
+					LOG_DBG << "expect: raw=\"" << it_exp->second << "\"";
+					std::string exp_val = serverutil::toLower(serverutil::trim(it_exp->second));
+					if (exp_val == "100-continue")
+						expect_continue = true;
+				}
+
+						conn.body_to_file = is_cgi_request;
+						if (expect_continue)
+						{
+							if (it_te != conn.request.headers.end()
+								&& serverutil::toLower(it_te->second) == "chunked"
+								&& max_body > 0)
+						{
+							conn.keep_alive = false;
+							conn.out_buf += buildErrorResponse(413, false, "MAX BODY SIZE exceeded",
+								&_error_pages[conn.config_index]);
+							conn.state = Client::WRITING;
+							serverutil::resetRequest(conn);
+							break;
+						}
+						LOG_DBG << "sending 100 Continue";
+						conn.out_buf += "HTTP/1.1 100 Continue\r\n\r\n";
+					}
+				if (it_te != conn.request.headers.end()
+					&& serverutil::toLower(it_te->second) == "chunked")
+				{
+					conn.chunked = true;
+					conn.chunk_bytes_remaining = 0;
+					conn.chunk_reading_trailer = false;
+					conn.chunked_complete = false;
+					conn.body_bytes_expected = max_body;
+					if (conn.body_to_file)
+					{
+						std::string terr;
+						if (!ensureBodyTempFile(conn, terr))
+						{
+							conn.keep_alive = false;
+							conn.out_buf += buildErrorResponse(500, false, terr, &_error_pages[conn.config_index]);
+							conn.state = Client::WRITING;
+							serverutil::resetRequest(conn);
+							break;
+						}
+					}
+					conn.state = Client::READING_BODY;
+					conn.req_phase = Client::PHASE_BODY;
+					continue;
+				}
 
 			if (conn.request.has_body)
 			{
-				conn.body_bytes_expected = conn.request.content_length;
-				conn.body_bytes_read = 0;
-				conn.state = Client::READING_BODY;
-				continue;
-			}
+					conn.body_bytes_expected = conn.request.content_length;
+					conn.body_bytes_read = 0;
+					conn.state = Client::READING_BODY;
+					conn.chunked_complete = false;
+					conn.req_phase = Client::PHASE_BODY;
+					if (!conn.body_to_file && conn.body_bytes_expected > kBodyFileThreshold)
+						conn.body_to_file = true;
+					if (conn.body_to_file)
+					{
+						std::string terr;
+						if (!ensureBodyTempFile(conn, terr))
+						{
+							conn.keep_alive = false;
+							conn.out_buf += buildErrorResponse(500, false, terr, &_error_pages[conn.config_index]);
+							conn.state = Client::WRITING;
+							serverutil::resetRequest(conn);
+							break;
+						}
+					}
+					if (conn.body_bytes_expected == 0)
+					{
+						handleReadyRequest(conn);
+						if (conn.state == Client::WRITING)
+							break;
+						conn.state = Client::READING_HEADERS;
+						conn.req_phase = Client::PHASE_HEADERS;
+						continue;
+					}
+					continue;
+				}
+				else
+			{
+				std::map<std::string, std::string>::const_iterator it_cl2 =
+					conn.request.headers.find("content-length");
+				if (it_cl2 != conn.request.headers.end())
+				{
+					size_t cl_value = 0;
+					std::istringstream ss(it_cl2->second);
+					ss >> cl_value;
+					if (!ss.fail())
+					{
+							conn.request.content_length = cl_value;
+							conn.request.has_body = true;
+							conn.body_bytes_expected = cl_value;
+							conn.body_bytes_read = 0;
+							conn.state = Client::READING_BODY;
+							conn.chunked_complete = false;
+							conn.req_phase = Client::PHASE_BODY;
+							if (!conn.body_to_file && conn.body_bytes_expected > kBodyFileThreshold)
+								conn.body_to_file = true;
+							if (conn.body_to_file)
+							{
+								std::string terr;
+								if (!ensureBodyTempFile(conn, terr))
+								{
+									conn.keep_alive = false;
+									conn.out_buf += buildErrorResponse(500, false, terr, &_error_pages[conn.config_index]);
+									conn.state = Client::WRITING;
+									serverutil::resetRequest(conn);
+									break;
+								}
+							}
+							if (conn.body_bytes_expected == 0)
+							{
+								handleReadyRequest(conn);
+								if (conn.state == Client::WRITING)
+									break;
+								conn.state = Client::READING_HEADERS;
+								conn.req_phase = Client::PHASE_HEADERS;
+								continue;
+							}
+							continue;
+						}
+					}
+				}
 
-			handleReadyRequest(conn);
-			if (conn.state == Client::WRITING)
-				break;
+				conn.state = Client::READING_BODY;
+				conn.req_phase = Client::PHASE_BODY;
+				handleReadyRequest(conn);
+				if (conn.state == Client::WRITING)
+					break;
+				conn.state = Client::READING_HEADERS;
+				conn.req_phase = Client::PHASE_HEADERS;
+			}
 		}
-	}
 }
 
 // Handle writing to client
@@ -1376,15 +1645,6 @@ void Worker::handleReadyRequest(Client &connection)
 
     cfg.logDebug();
 
-    if (!serverutil::isMethodAllowed(loc.getAllowedMethods(), connection.request.method))
-    {
-        respondError(connection, 405,
-                    "loc && !serverutil::isMethodAllowed(loc->getAllowedMethods(), conn.request.method)",
-                    &_error_pages[connection.config_index],
-                    connection.request.method_enum == METHOD_HEAD);
-        return;
-    }
-
     if (hasTraversal(uri))
     {
         respondError(connection, 403, "hasTraversal(uri)",
@@ -1433,22 +1693,71 @@ void Worker::handleReadyRequest(Client &connection)
     autoindex = loc.getAutoindex();
 
     std::string path;
+    std::string loc_path = loc.getPath();
+    std::string remainder;
+    if (!loc_path.empty())
+    {
+        if (loc_path.size() > 1 && loc_path[loc_path.size() - 1] == '/')
+        {
+            std::string loc_no_slash = loc_path.substr(0, loc_path.size() - 1);
+            if (uri == loc_no_slash)
+                remainder.clear();
+            else if (uri.size() >= loc_path.size())
+                remainder = uri.substr(loc_path.size());
+        }
+        else if (uri.size() >= loc_path.size())
+        {
+            remainder = uri.substr(loc_path.size());
+        }
+    }
     if (!alias.empty())
     {
         // Alias replaces the location path prefix
-        std::string remainder = uri.substr(loc.getPath().size());
         path = joinPath(alias, remainder);
         LOG_DBG << "!alias.empty() " << path;
     }
     else if (!loc.getRoot().empty() && loc.getPath() != "/")
     {
-        std::string remainder = uri.substr(loc.getPath().size());
         path = joinPath(root, remainder);
     }
     else
     {
         path = joinPath(root, uri);
     }
+
+	// Directory handling: redirect missing trailing slash and resolve index.
+		if (isDirectory(path))
+		{
+			bool has_trailing = (!uri.empty() && uri[uri.size() - 1] == '/');
+			bool location_requires_slash = (!loc.getPath().empty()
+				&& loc.getPath().size() > 1
+				&& loc.getPath()[loc.getPath().size() - 1] == '/');
+			if (!has_trailing && location_requires_slash)
+		{
+			std::string location = uri + "/";
+			if (!connection.request.query.empty())
+				location += "?" + connection.request.query;
+			std::map<std::string, std::string> extra;
+			extra["Location"] = location;
+			connection.out_buf += buildResponse(301, "", connection.keep_alive, "text/plain",
+												false, extra);
+			connection.state = Client::WRITING;
+			serverutil::resetRequest(connection);
+			return;
+		}
+		if (!index.empty())
+		{
+			path = joinPath(path, index);
+			connection.request.file_name = index;
+		}
+		else if (!autoindex)
+		{
+			respondError(connection, 404, "directory listing denied",
+						&_error_pages[connection.config_index],
+						connection.request.method_enum == METHOD_HEAD);
+			return;
+		}
+	}
 
     connection.cgi_request = false;   // Reset first
     connection.location = &loc;       // NOTE: pointer-to-local (keep as-is for now)
@@ -1463,6 +1772,28 @@ void Worker::handleReadyRequest(Client &connection)
         for (size_t i = 0; i < cgi_exts.size(); ++i)
             LOG_DBG << "getCgiExt " << cgi_exts[i];
 
+        bool ext_match = false;
+        std::vector<std::string> cgi_path = loc.getCgiPath();
+        bool custom_cgi = (cgi_path.size() >= 2);
+        std::string ext_key;
+        if (custom_cgi)
+        {
+            ext_key = cgi_path[0];
+            if (!ext_key.empty() && ext_key[0] != '.')
+                ext_key = "." + ext_key;
+        }
+	        for (size_t i = 0; i < cgi_exts.size(); ++i)
+	        {
+	            std::string e = cgi_exts[i];
+	            if (!e.empty() && e[0] != '.')
+	                e = "." + e;
+	            if (ext == e)
+	            {
+	                ext_match = true;
+	                break;
+	            }
+	        }
+
         // If no extensions configured, allow common CGI extensions
         if (cgi_exts.empty())
         {
@@ -1471,30 +1802,68 @@ void Worker::handleReadyRequest(Client &connection)
 
             if (ext == ".py")
                 connection.request.cgi = Python;
+            else if (ext == ".php")
+                connection.request.cgi = PHP;
+            else if (ext == ".sh")
+                connection.request.cgi = Shell;
         }
-        else
+        else if (ext_match)
         {
-            for (size_t i = 0; i < cgi_exts.size(); ++i)
+            connection.cgi_request = true;
+        }
+
+        if (connection.cgi_request)
+        {
+            if (custom_cgi)
             {
-                if (ext == cgi_exts[i])
-                {
-                    connection.cgi_request = true;
-                    break;
-                }
+                if (ext == ext_key)
+                    connection.request.cgi = Static;
+            }
+            else if (ext == ".py")
+            {
+                connection.request.cgi = Python;
+            }
+            else if (ext == ".php")
+            {
+                connection.request.cgi = PHP;
+            }
+            else if (ext == ".sh")
+            {
+                connection.request.cgi = Shell;
             }
         }
 
         if (connection.cgi_request)
         {
-            std::string ext = getFileExtension(connection.request.file_name);
-            connection.cgi_script_path = resolveCgiScriptPath(loc, cfg, path, ext);
-            LOG_DBG << "LOG_DBG cgi_script_path " << connection.cgi_script_path;
-            if (!cfg.getCgiBinPath().empty())
-                connection.cgi_bin_path = cfg.getCgiBinPath();
+            if (custom_cgi && ext == ext_key)
+            {
+                std::string exec = cgi_path[1];
+                if (!exec.empty() && exec[0] != '/' && !cfg.getCgiBinPath().empty())
+                    exec = joinPath(cfg.getCgiBinPath(), exec);
+                connection.cgi_script_path = path;
+                connection.cgi_bin_path = exec;
+            }
             else
-                connection.cgi_bin_path = !alias.empty() ? alias : loc.getCgiBinPath();
+            {
+                connection.cgi_script_path = resolveCgiScriptPath(loc, cfg, path, ext);
+                if (!cfg.getCgiBinPath().empty())
+                    connection.cgi_bin_path = cfg.getCgiBinPath();
+                else
+                    connection.cgi_bin_path = !alias.empty() ? alias : loc.getCgiBinPath();
+            }
+            LOG_DBG << "LOG_DBG cgi_script_path " << connection.cgi_script_path;
             connection.cgi_path_info = ""; // Can be enhanced later
         }
+    }
+
+    bool method_allowed = serverutil::isMethodAllowed(loc.getAllowedMethods(), connection.request.method);
+    if (!method_allowed && !connection.cgi_request)
+    {
+        respondError(connection, 405,
+                    "loc && !serverutil::isMethodAllowed(loc->getAllowedMethods(), conn.request.method)",
+                    &_error_pages[connection.config_index],
+                    connection.request.method_enum == METHOD_HEAD);
+        return;
     }
 
     if (connection.cgi_request)
