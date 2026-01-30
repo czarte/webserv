@@ -19,8 +19,7 @@ CONFIG_SRCS := \
 	srcs/config/ConfigParser.cpp \
 	srcs/config/Config.cpp \
 	srcs/config/Location.cpp \
-	srcs/config/Route.cpp \
-	srcs/config/WebservMaster.cpp
+	srcs/config/Route.cpp
 
 IO_SRCS := \
 	srcs/io/Socket.cpp \

@@ -53,7 +53,6 @@ set(CONFIG_SRCS
         srcs/config/Config.cpp
         srcs/config/Location.cpp
         srcs/config/Route.cpp
-        srcs/config/WebservMaster.cpp
 )
 
 # IO sources

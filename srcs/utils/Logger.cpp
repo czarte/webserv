@@ -8,7 +8,7 @@ namespace
 	LogLevel parseLogLevel(const char* value)
 	{
 		if (!value || !*value)
-			return LOG_DEBUG;
+			return LOG_NONE;
 		std::string v(value);
 		for (size_t i = 0; i < v.size(); ++i)
 			v[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(v[i])));
@@ -22,7 +22,7 @@ namespace
 			return LOG_ERROR;
 		if (v == "none" || v == "4")
 			return LOG_NONE;
-		return LOG_DEBUG;
+		return LOG_NONE;
 	}
 }
 
