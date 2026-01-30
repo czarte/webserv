@@ -11,6 +11,7 @@ CgiHandler::CgiHandler()
       _documentRoot("/var/www"),
       _serverName("localhost"),
       _serverPort(8080),
+      _uploadPath(""),
       _hasError(false)
 {
 }
@@ -107,6 +108,11 @@ void CgiHandler::setServerPort(int port)
     _serverPort = port;
 }
 
+void CgiHandler::setUploadPath(const std::string& path)
+{
+    _uploadPath = path;
+}
+
 bool CgiHandler::hasError() const
 {
     return _hasError;
@@ -192,6 +198,9 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
     // Remote address (if available)
     env["REMOTE_ADDR"] = "127.0.0.1";
     env["REMOTE_HOST"] = "localhost";
+
+    if (!_uploadPath.empty())
+        env["UPLOAD_PATH"] = _uploadPath;
 
     return env;
 }

@@ -906,6 +906,12 @@ namespace
 		handler.setDocumentRoot(cfg.getRoot());
 		handler.setServerName(cfg.getServerName());
 		handler.setServerPort(cfg.getPort());
+		if (connection.location != NULL)
+		{
+			std::string upload_path = connection.location->getUploadPath();
+			if (!upload_path.empty())
+				handler.setUploadPath(upload_path);
+		}
 
 		// Execute CGI script (cgi_script_path already points to the script file)
 		std::string cgi_output = handler.handleRequest(connection, connection.cgi_script_path);

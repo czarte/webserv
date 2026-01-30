@@ -21,6 +21,7 @@ public:
     void setDocumentRoot(const std::string& root);
     void setServerName(const std::string& name);
     void setServerPort(int port);
+    void setUploadPath(const std::string& path);
 
     // Check if the handler had an error
     bool hasError() const;
@@ -32,6 +33,7 @@ private:
     std::string _documentRoot;
     std::string _serverName;
     int _serverPort;
+    std::string _uploadPath;
     bool _hasError;
     std::string _errorMessage;
 
