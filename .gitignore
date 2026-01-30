@@ -12,3 +12,4 @@ test/*
 test
 cgi-bin/uploads/
 www/site1/uploads/
+cgi-bin

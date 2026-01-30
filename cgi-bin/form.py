@@ -295,11 +295,11 @@ def main():
             content_length = 0
 
         content_type = os.environ.get("CONTENT_TYPE", "")
+        upload_conf = os.environ.get("UPLOAD_PATH")
 
         # Determine upload directory relative to script location
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        upload_dir = os.path.join(script_dir, "uploads")
-        upload_dir = os.path.normpath(upload_dir)
+        #script_dir = os.path.dirname(os.path.abspath(__file__))
+        upload_dir = os.path.normpath(upload_conf)
 
         # Read POST data from stdin in binary mode
         post_data = b""

@@ -42,6 +42,7 @@ std::string CgiHandler::handleRequest(const Client& connection, const std::strin
         return "Status: 500 Internal Server Error\r\n\r\nCGI Error: Unsupported script type";
     }
     cgiProcess.setInterpreter(interpreterPath);
+    setUploadPath(connection.location->getUploadPath());
 
     // Build CGI environment variables
     std::map<std::string, std::string> cgiEnv = buildCgiEnvironment(connection.request, scriptPath);
@@ -107,6 +108,11 @@ void CgiHandler::setServerPort(int port)
     _serverPort = port;
 }
 
+void CgiHandler::setUploadPath(const std::string &path)
+{
+    _upload_path = path;
+}
+
 bool CgiHandler::hasError() const
 {
     return _hasError;
@@ -134,6 +140,9 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
 
     // Request method
     env["REQUEST_METHOD"] = request.method;
+
+    //upload path
+    env["UPLOAD_PATH"] = _upload_path;
 
     // Script information
     env["SCRIPT_NAME"] = getScriptName(scriptPath);
