@@ -879,7 +879,14 @@ namespace
 		}
 		else if (ext == ".php")
 		{
-			handler.setPhpInterpreter("/usr/bin/php");
+			std::string php_interpreter = "/usr/bin/php-cgi";
+			if (connection.location)
+			{
+				std::vector<std::string> cgi_path = connection.location->getCgiPath();
+				if (!cgi_path.empty())
+					php_interpreter = cgi_path[0];
+			}
+			handler.setPhpInterpreter(php_interpreter);
 			connection.request.cgi = PHP;
 		}
 		else if (ext == ".sh")
