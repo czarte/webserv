@@ -132,6 +132,7 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
     env["SERVER_SOFTWARE"] = "WebServ/1.0";
     env["SERVER_NAME"] = _serverName;
     env["SERVER_PROTOCOL"] = request.version;
+    env["REDIRECT_STATUS"] = "200";
 
     // Server port
     std::stringstream portStr;
