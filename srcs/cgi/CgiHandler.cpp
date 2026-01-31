@@ -75,9 +75,9 @@ std::string CgiHandler::handleRequest(const Client& connection, const std::strin
 
     // Check if output contains headers, if not add default
     if (output.find("Content-Type:") == std::string::npos &&
-        output.find("content-type:") == std::string::npos)
+        output.find("content-type:") == std::string::npos && connection.request.cgi != PHP)
     {
-        output = "Content-Type: text/html\r\n\r\n" + output;
+       output = "Content-Type: text/html\r\n\r\n" + output;
     }
 
     return output;

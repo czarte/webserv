@@ -1,4 +1,3 @@
-<?php echo("Content-Type: text/html\r\n\r\n"); ?>
 <html>
 <head>
   <meta charset="utf-8">
