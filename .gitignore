@@ -1,3 +1,15 @@
 cmake-build-debug
 webserver
 .idea
+build
+webserv
+webserv*
+webserv_tester
+webserv_tester/*
+.vscode
+*.log
+test/*
+test
+cgi-bin/uploads/
+www/site1/uploads/
+cgi-bin

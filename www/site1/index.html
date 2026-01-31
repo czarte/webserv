@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>webserv – 42 Project Home</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+
+<body>
+  <div class="wrap">
+    <main class="card" role="main">
+      <!-- ===================== Header ===================== -->
+      <header class="top">
+        <div class="badge">42</div>
+        <div>
+          <h1>webserv</h1>
+          <div class="sub">HTTP/1.1 web server — 42 School project</div>
+          <div class="small">
+            Team: <span class="code">adjeuken</span> • <span class="code">voparkan</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ===================== Content ===================== -->
+      <section class="content">
+        <!-- About -->
+        <div class="panel">
+          <h2>About the project</h2>
+          <p class="sub">
+            <strong>webserv</strong> is a custom HTTP/1.1 server written in C++.
+            This homepage doubles as a live README + evaluation test surface.
+          </p>
+
+          <ul class="env-list">
+            <li><span class="env-key">Protocol</span><span class="env-sep">=</span><span class="env-val">HTTP/1.1</span></li>
+            <li><span class="env-key">Methods</span><span class="env-sep">=</span><span class="env-val">GET / POST / DELETE</span></li>
+            <li><span class="env-key">Upload</span><span class="env-sep">=</span><span class="env-val">server-native + CGI paths</span></li>
+            <li><span class="env-key">Bodies</span><span class="env-sep">=</span><span class="env-val">Content-Length + chunked</span></li>
+          </ul>
+        </div>
+
+        <!-- Live tests -->
+        <div class="panel">
+          <h2>Live server tests</h2>
+          <p class="sub">
+            Use the actions below during evaluation to demonstrate behavior quickly.
+            The result codes may vary depending on your config (201/204/303 can all be valid).
+          </p>
+
+          <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+            <a class="btn" href="/">GET / (home)</a>
+            <a class="btn" href="/uploads/">GET /uploads/ (if enabled)</a>
+            <a class="btn" href="/uploads/test.txt">GET /uploads/test.txt</a>
+            <a class="btn" href="/nope">GET /nope (404)</a>
+          </div>
+        </div>
+
+        <!-- POST upload (form) -->
+        <div class="panel">
+          <h2>POST upload test (server-native)</h2>
+
+          <p class="sub">
+            This form submits <span class="code">application/x-www-form-urlencoded</span> to
+            <span class="code">/uploads/test.txt</span>. If upload is wired correctly, a file is created under
+            <span class="code">www/uploads/test.txt</span>.
+          </p>
+
+          <form method="POST" action="/uploads/test.txt">
+            <label class="sub" for="data">Body (textarea)</label>
+            <textarea
+              id="data"
+              name="data"
+              rows="7"
+              style="width:100%; margin-top:6px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"
+            >Hello from webserv (form-encoded)</textarea>
+
+            <div class="actions" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn" type="submit">Upload (form)</button>
+              <button class="btn" type="button" id="rawUpload">Upload (raw text/plain)</button>
+              <button class="btn" type="button" id="resetText">Reset</button>
+            </div>
+
+            <pre id="uploadResult" class="code" style="margin-top:12px; white-space:pre-wrap; display:none;"></pre>
+          </form>
+        </div>
+
+        <!-- CGI quick links (optional, adapt to your routes) -->
+        <div class="panel">
+          <h2>CGI quick checks</h2>
+          <p class="sub">
+            These links are placeholders — update them to match your configured CGI routes.
+          </p>
+          <ul>
+            <li><a href="/directory/youpi.bla">/directory/youpi.bla</a> (your evaluator target)</li>
+            <li><a href="/cgi-bin/">/cgi-bin/</a> (if you expose a CGI dir)</li>
+          </ul>
+        </div>
+
+        <!-- Config overview (edit to match your conf) -->
+        <div class="panel">
+          <h2>Config overview (edit this to match your conf)</h2>
+          <ul class="env-list">
+            <li><span class="env-key">Port</span><span class="env-sep">=</span><span class="env-val">8080</span></li>
+            <li><span class="env-key">Root</span><span class="env-sep">=</span><span class="env-val">www/site1</span></li>
+            <li><span class="env-key">Uploads</span><span class="env-sep">=</span><span class="env-val">www/uploads</span></li>
+            <li><span class="env-key">CGI</span><span class="env-sep">=</span><span class="env-val">Enabled on some locations</span></li>
+          </ul>
+        </div>
+
+        <!-- README.md (served as static file) -->
+        <div class="panel">
+          <h2>README.md</h2>
+          <p class="sub">
+            If your server serves <span class="code">/README.md</span> as a static file, it will be displayed below.
+            Otherwise, you’ll see an error message.
+          </p>
+
+          <div class="actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+            <a class="btn" href="/README.md">Open /README.md</a>
+            <button class="btn" type="button" id="reloadReadme">Reload README</button>
+          </div>
+
+          <pre id="readmeBox" class="code" style="margin-top:12px; white-space:pre-wrap; max-height:420px; overflow:auto;">
+Loading /README.md...
+          </pre>
+        </div>
+
+        <!-- How to run -->
+        <div class="panel">
+          <h2>How to run</h2>
+          <pre class="code" style="white-space:pre-wrap;">make
+./webserv conf/test.conf
+open http://localhost:8080</pre>
+        </div>
+      </section>
+
+      <!-- ===================== Footer ===================== -->
+      <footer class="footer">
+        <div class="small">
+          <span class="code">webserv</span>
+          <span class="sep">•</span>
+          42 School
+          <span class="sep">•</span>
+          <span class="code">adjeuken</span> • <span class="code">voparkan</span>
+        </div>
+        <div class="small code">
+          GET / • POST /uploads/test.txt • (optional) /README.md
+        </div>
+      </footer>
+    </main>
+  </div>
+
+
+</body>
+</html>
