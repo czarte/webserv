@@ -284,7 +284,7 @@ Webserv supports CGI (Common Gateway Interface) for executing dynamic scripts. C
 ```nginx
 location /cgi-bin {
     allow_methods GET POST;
-    cgi_path /usr/bin/python3;
+    cgi_path path/to/scripts;
     cgi_ext .py;
     upload_path uploads/;
 }
@@ -305,6 +305,7 @@ The server sets standard CGI environment variables:
 
 ### CGI Example
 
+#### Python
 ```python
 #!/usr/bin/env python3
 import os
@@ -318,13 +319,14 @@ print(f"<p>Query String: {os.environ.get('QUERY_STRING')}</p>")
 print("</body></html>")
 ```
 
+#### PHP
 ```PHP
 
 <?php
 phpinfo();
 
 ```
-
+#### Bash
 ```Bash
 #!/bin/bash
 
@@ -434,7 +436,7 @@ cd own_tester
 Open your browser and navigate to:
 - `http://localhost:8080/` - Main page
 - `http://localhost:8080/uploads/` - Upload directory (with autoindex)
-- `http://localhost:8080/cgi-bin/test.py` - CGI script execution
+- `http://localhost:8080/cgi/form.py` - CGI script execution
 - `http://localhost:8080/session` - Session management
 
 ## Examples
@@ -509,7 +511,7 @@ server {
 
 # Site 2
 server {
-    listen 8080;
+    listen 8081;
     server_name site2.local;
     root www/site2;
     index index.html;
@@ -523,15 +525,15 @@ server {
 Access with:
 ```bash
 curl -H "Host: site1.local" http://localhost:8080/
-curl -H "Host: site2.local" http://localhost:8080/
+curl -H "Host: site2.local" http://localhost:8081/
 ```
 
 ## Known Limitations
 
 ### Current Limitations
 
-- **CGI Interpreters**: Currently supports Python only (easy to extend to other interpreters)
-- **Virtual Hosts**: Name-based virtual hosting is supported; IP-based is not implemented
+- **CGI Interpreters**: Currently supports Python, PHP and Bash (easy to extend to other interpreters)
+- **Virtual Hosts**: Port-based virtual hosting is supported; IP-based is not implemented
 - **File I/O**: Disk file operations are synchronous (allowed by project requirements)
 - **SSL/TLS**: HTTPS is not supported
 - **HTTP/2**: Only HTTP/1.1 is implemented
