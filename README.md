@@ -318,6 +318,20 @@ print(f"<p>Query String: {os.environ.get('QUERY_STRING')}</p>")
 print("</body></html>")
 ```
 
+```PHP
+
+<?php
+phpinfo();
+
+```
+
+```Bash
+#!/bin/bash
+
+echo "Hello Word"
+
+```
+
 ### CGI Execution Model
 
 1. Client sends request to CGI endpoint
@@ -553,6 +567,10 @@ make
 2. **New HTTP Method**: Extend request parser and add handler in location processing
 3. **New Configuration Directive**: Add to config parser and corresponding handler
 
+### Resources
+
+[https://aosabook.org/en/v2/nginx.html]
+
 ### Documentation
 
 - [HTTP_HEADER.md](HTTP_HEADER.md) - HTTP/1.1 header handling reference
@@ -562,7 +580,7 @@ make
 
 ## Contributors
 
-This project was developed as part of the 42 school curriculum.
+This project was developed as part of the 42 school curriculum by voparkan and adjeuken
 
 ## License
 
