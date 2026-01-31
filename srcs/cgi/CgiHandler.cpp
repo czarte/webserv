@@ -132,6 +132,7 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
     env["SERVER_SOFTWARE"] = "WebServ/1.0";
     env["SERVER_NAME"] = _serverName;
     env["SERVER_PROTOCOL"] = request.version;
+    env["DOCUMENT_ROOT"] = _documentRoot;
 
     // Server port
     std::stringstream portStr;
@@ -198,6 +199,8 @@ std::map<std::string, std::string> CgiHandler::buildCgiEnvironment(const Request
     // Remote address (if available)
     env["REMOTE_ADDR"] = "127.0.0.1";
     env["REMOTE_HOST"] = "localhost";
+    // Needed by php-cgi when not running under Apache
+    env["REDIRECT_STATUS"] = "200";
 
     if (!_uploadPath.empty())
         env["UPLOAD_PATH"] = _uploadPath;

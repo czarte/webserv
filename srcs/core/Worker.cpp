@@ -918,7 +918,7 @@ namespace
 
 		if (handler.hasError())
 		{
-			respondError(connection, 500, "handler.hasError()", pages, head_only);
+			respondError(connection, 500, handler.getErrorMessage(), pages, head_only);
 			return;
 		}
 
@@ -1812,8 +1812,11 @@ void Worker::handleReadyRequest(Client &connection)
     }
     if (!alias.empty())
     {
-        // Alias replaces the location path prefix
-        path = joinPath(alias, remainder);
+        // Alias replaces the location path prefix; relative aliases are rooted at "root"
+        if (!alias.empty() && alias[0] == '/')
+            path = joinPath(alias, remainder);
+        else
+            path = joinPath(root, joinPath(alias, remainder));
         LOG_DBG << "!alias.empty() " << path;
     }
     else if (!loc.getRoot().empty() && loc.getPath() != "/")
@@ -1952,6 +1955,10 @@ void Worker::handleReadyRequest(Client &connection)
                     connection.cgi_bin_path = !alias.empty() ? alias : loc.getCgiBinPath();
             }
             LOG_DBG << "LOG_DBG cgi_script_path " << connection.cgi_script_path;
+            // php-cgi expects SCRIPT_FILENAME to be an absolute real path
+            std::string real_script;
+            if (serverutil::resolveRealPath(connection.cgi_script_path, real_script))
+                connection.cgi_script_path = real_script;
             connection.cgi_path_info = ""; // Can be enhanced later
         }
     }
