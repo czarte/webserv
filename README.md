@@ -29,7 +29,7 @@ Webserv is a fully-featured HTTP/1.1 web server written in C++ that implements:
 - **CGI execution** for dynamic content generation
 - **Request body handling** with configurable size limits
 - **Session management** with cookie support
-- **Name-based virtual hosting**
+- **Port-based virtual hosting**
 - **Keep-alive connections** for improved performance
 
 This project adheres to RFC 2616 (HTTP/1.1) specifications and provides a robust, scalable foundation for serving web content.
